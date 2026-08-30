@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: spike/bin/ffmpeg
-          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v1
+          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v2
 
       - name: Build LGPL ffmpeg from official source (AAC/M4B only)
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
@@ -46,12 +46,13 @@ jobs:
             --disable-doc --disable-debug --enable-static --disable-shared \
             --disable-ffplay --disable-ffprobe \
             --enable-protocol=file,pipe \
-            --enable-demuxer=wav,aiff,concat,mov,ffmetadata \
-            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac \
-            --enable-parser=aac \
-            --enable-encoder=aac \
-            --enable-muxer=ipod,mp4 \
-            --enable-filter=aresample,aformat,anull
+            --enable-indev=lavfi \
+            --enable-demuxer=wav,aiff,concat,mov,ffmetadata,image2 \
+            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac,mjpeg \
+            --enable-parser=aac,mjpeg \
+            --enable-encoder=aac,pcm_s16be,mjpeg \
+            --enable-muxer=ipod,mp4,aiff,image2,null \
+            --enable-filter=aresample,aformat,anull,anullsrc,color,scale,format
           make -j"$(sysctl -n hw.ncpu)"
           mkdir -p ../spike/bin
           cp ffmpeg ../spike/bin/ffmpeg
@@ -75,6 +76,68 @@ jobs:
           spike/bin/ffmpeg -hide_banner -L 2>&1 | grep -qi "Lesser General Public License" \
             || { echo "FAIL: license text is not LGPL"; exit 1; }
           echo "OK: LGPL build, no --enable-gpl"
+
+      - name: Functional test — full M4B assembly path, bundled ffmpeg only
+        run: |
+          set -euo pipefail
+          FF="$PWD/spike/bin/ffmpeg"
+          mkdir -p m4btest && cd m4btest
+
+          echo "=== 1. generate two silent AIFF files (what cddafs yields) ==="
+          "$FF" -hide_banner -y -f lavfi -i "anullsrc=r=44100:cl=stereo" -t 2 \
+            -c:a pcm_s16be "part 1.aiff"
+          "$FF" -hide_banner -y -f lavfi -i "anullsrc=r=44100:cl=stereo" -t 3 \
+            -c:a pcm_s16be "part 2.aiff"
+          ls -l part*.aiff
+
+          echo "=== generate a cover image ==="
+          "$FF" -hide_banner -y -f lavfi -i "color=c=0x336699:s=600x600:d=1" \
+            -frames:v 1 cover.jpg
+          ls -l cover.jpg
+
+          echo "=== 2-6. concat + AAC + ipod mux + chapters + cover, one pass ==="
+          printf "file 'part 1.aiff'\nfile 'part 2.aiff'\n" > list.txt
+          cat > chapters.txt <<'META'
+          ;FFMETADATA1
+          title=Spike Test Book
+          artist=Spike Author
+          [CHAPTER]
+          TIMEBASE=1/1000
+          START=0
+          END=2000
+          title=Disc 1
+          [CHAPTER]
+          TIMEBASE=1/1000
+          START=2000
+          END=5000
+          title=Disc 2
+          META
+          # the heredoc above is indented for YAML; strip leading spaces
+          sed -i '' 's/^ *//' chapters.txt
+          "$FF" -hide_banner -y \
+            -f concat -safe 0 -i list.txt -i chapters.txt -i cover.jpg \
+            -map 0:a -map 2:v -map_metadata 1 -map_chapters 1 \
+            -c:a aac -b:a 64k -c:v copy -disposition:v:0 attached_pic \
+            -f ipod book.m4b
+          ls -l book.m4b
+
+          echo "=== 7. read back and assert ==="
+          "$FF" -hide_banner -i book.m4b 2> info.txt || true
+          cat info.txt
+          grep -q "title           : Disc 1" info.txt || { echo "FAIL: chapter 'Disc 1' missing"; exit 1; }
+          grep -q "title           : Disc 2" info.txt || { echo "FAIL: chapter 'Disc 2' missing"; exit 1; }
+          grep -q "Duration: 00:00:05" info.txt      || { echo "FAIL: duration is not 5s (concat broken)"; exit 1; }
+          grep -qi "attached pic" info.txt           || { echo "FAIL: cover not flagged as attached pic"; exit 1; }
+          grep -qi "mjpeg" info.txt                  || { echo "FAIL: no mjpeg cover stream"; exit 1; }
+
+          echo "=== decode the whole book back (proves AAC+cover decode) ==="
+          "$FF" -hide_banner -y -i book.m4b -map 0:a -f null -
+
+          echo "=== extract the cover back out ==="
+          "$FF" -hide_banner -y -i book.m4b -map 0:v -c copy -frames:v 1 cover_out.jpg
+          test -s cover_out.jpg || { echo "FAIL: extracted cover is empty"; exit 1; }
+          ls -l cover_out.jpg
+          echo "OK: full assembly path works with the LGPL build"
 
       - name: Install PyInstaller
         run: pip install pyinstaller
