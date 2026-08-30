@@ -1,4 +1,26 @@
-# Only the packaging spike and workflow are published; the app stays local for now.
-Output/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts (PyInstaller etc.)
+build/
+dist/
+*.spec
+
+# Ripped audio and finished audiobooks — never commit media
+Output/
+_rip/
+*.wav
+*.partial
+*.m4b
+*.aiff
+
+# OS noise
+Thumbs.db
+.DS_Store
