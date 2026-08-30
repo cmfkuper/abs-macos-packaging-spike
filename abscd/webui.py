@@ -17,6 +17,7 @@ from pathlib import Path
 import webview
 
 from . import cdrom, engine
+from .settings import Settings, check_output_folder
 
 PROGRESS_MIN_INTERVAL = 0.1  # seconds between progress pushes to the bridge
 
@@ -38,10 +39,13 @@ class JsApi:
     def answer(self, value):
         return self._backend.answer(value)
 
+    def choose_output_folder(self):
+        return self._backend.choose_output_folder()
+
 
 class Backend:
-    def __init__(self, output_root: Path):
-        self.output_root = output_root
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or Settings()
         self.window: webview.Window | None = None
         self.events: queue.Queue = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -50,10 +54,47 @@ class Backend:
         self.job: engine.Job | None = None
         self._close_armed_until = 0.0
 
+    # ---------- output folder ----------
+
+    @property
+    def output_root(self) -> Path:
+        return self.settings.output_root
+
+    def _output_status(self) -> dict:
+        """Current destination + usability. First-ever launch auto-creates the
+        historical default (Output/ next to the app) so behavior is unchanged."""
+        root = self.settings.output_root
+        if not self.settings.has("output_root"):
+            # First-ever launch: auto-create the historical default so nothing
+            # changes for existing behavior.
+            try:
+                root.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass
+        error = check_output_folder(root)
+        return {"output_root": str(root), "output_ok": error is None,
+                "output_error": error or ""}
+
+    def choose_output_folder(self):
+        """Native folder picker; validate, persist, and report."""
+        result = self.window.create_file_dialog(
+            webview.FOLDER_DIALOG, directory=str(self.settings.output_root))
+        if not result:
+            return self._output_status()  # cancelled — report current state
+        chosen = Path(result[0])
+        error = check_output_folder(chosen)
+        if error is not None:
+            current = self._output_status()
+            current["output_error"] = error
+            return current
+        self.settings.output_root = chosen
+        self.settings.save()
+        return self._output_status()
+
     # ---------- JS -> Python API (exposed as window.pywebview.api) ----------
 
     def get_init(self):
-        return {"drives": cdrom.list_optical_drives()}
+        return {"drives": cdrom.list_optical_drives(), **self._output_status()}
 
     def start_job(self, author: str, title: str, year: str, drive: str):
         author, title, year = author.strip(), title.strip(), year.strip()
@@ -69,6 +110,9 @@ class Backend:
             return {"ok": False, "error":
                     "ffmpeg is required to build the M4B but was not found. "
                     "Install it with:  winget install Gyan.FFmpeg  and restart."}
+        folder_error = check_output_folder(self.output_root)
+        if folder_error is not None:
+            return {"ok": False, "error": folder_error + " — choose a new folder."}
 
         self.job = engine.Job.create(self.output_root, author, title, year)
         self.cancel_flag.clear()
@@ -229,8 +273,7 @@ class Backend:
 def main():
     from .uiassets import load_html
 
-    project_root = Path(__file__).resolve().parent.parent
-    backend = Backend(output_root=project_root / "Output")
+    backend = Backend()
     window = webview.create_window(
         "Audiobook CD → M4B", html=load_html(), js_api=JsApi(backend),
         width=680, height=640, min_size=(560, 480))

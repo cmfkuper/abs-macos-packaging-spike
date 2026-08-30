@@ -122,6 +122,18 @@ function backToForm() {
   $("author").focus();
 }
 
+function applyOutputStatus(info) {
+  $("output-path").textContent = info.output_root;
+  if (info.output_ok) {
+    show("output-error", false);
+  } else {
+    $("output-error").textContent =
+      info.output_error + " Choose a new folder before ripping.";
+    show("output-error", true);
+  }
+  $("start-btn").disabled = !info.output_ok;
+}
+
 function init() {
   window.pywebview.api.get_init().then((info) => {
     const sel = $("drive");
@@ -136,6 +148,11 @@ function init() {
       $("form-error").textContent = "No optical drive was found on this computer.";
       show("form-error", true);
     }
+    applyOutputStatus(info);
+  });
+
+  $("change-output-btn").addEventListener("click", () => {
+    window.pywebview.api.choose_output_folder().then(applyOutputStatus);
   });
 
   $("start-btn").addEventListener("click", startRip);
@@ -159,7 +176,8 @@ function init() {
   $("again-btn").addEventListener("click", backToForm);
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !$("screen-form").hidden) startRip();
+    if (e.key === "Enter" && !$("screen-form").hidden
+        && !$("start-btn").disabled) startRip();
   });
 }
 
