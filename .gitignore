@@ -1,0 +1,4 @@
+# Only the packaging spike and workflow are published; the app stays local for now.
+Output/
+__pycache__/
+*.pyc

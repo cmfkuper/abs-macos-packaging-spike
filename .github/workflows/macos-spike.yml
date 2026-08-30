@@ -1,0 +1,106 @@
+name: macOS packaging spike
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "spike/**"
+      - ".github/workflows/macos-spike.yml"
+
+env:
+  FFMPEG_VERSION: "9.0.1"
+
+jobs:
+  build-app:
+    # macos-latest is an Apple Silicon (arm64) runner
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify tkinter is present in this Python
+        run: python -c "import tkinter; print('tkinter OK, Tk', tkinter.TkVersion)"
+
+      - name: Cache the LGPL ffmpeg build
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: spike/bin/ffmpeg
+          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v1
+
+      - name: Build LGPL ffmpeg from official source (AAC/M4B only)
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 -o ffmpeg-src.tar.xz \
+            "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+          tar xf ffmpeg-src.tar.xz
+          cd "ffmpeg-${FFMPEG_VERSION}"
+          # No --enable-gpl and no external libs: pure LGPL 2.1+ configuration.
+          # Only the components an audiobook ripper needs are compiled in.
+          ./configure \
+            --disable-everything --disable-autodetect --disable-network \
+            --disable-doc --disable-debug --enable-static --disable-shared \
+            --disable-ffplay --disable-ffprobe \
+            --enable-protocol=file,pipe \
+            --enable-demuxer=wav,aiff,concat,mov,ffmetadata \
+            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac \
+            --enable-parser=aac \
+            --enable-encoder=aac \
+            --enable-muxer=ipod,mp4 \
+            --enable-filter=aresample,aformat,anull
+          make -j"$(sysctl -n hw.ncpu)"
+          mkdir -p ../spike/bin
+          cp ffmpeg ../spike/bin/ffmpeg
+
+      - name: Verify architecture and LGPL license
+        run: |
+          chmod +x spike/bin/ffmpeg
+          echo "--- architecture ---"
+          file spike/bin/ffmpeg
+          lipo -info spike/bin/ffmpeg || true
+          echo "--- version banner ---"
+          spike/bin/ffmpeg -version
+          echo "--- license (ffmpeg -L) ---"
+          spike/bin/ffmpeg -L 2>&1 | head -6
+          echo "--- assertions ---"
+          if spike/bin/ffmpeg -version | grep -q "enable-gpl"; then
+            echo "FAIL: --enable-gpl found in configuration"; exit 1
+          fi
+          spike/bin/ffmpeg -L 2>&1 | grep -qi "LGPL" || { echo "FAIL: banner does not say LGPL"; exit 1; }
+          echo "OK: LGPL build, no --enable-gpl"
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build the .app bundle
+        working-directory: spike
+        run: |
+          pyinstaller --noconfirm --windowed \
+            --name "ABS Spike" \
+            --osx-bundle-identifier "com.chris.abs-spike" \
+            --add-binary "bin/ffmpeg:." \
+            testapp.py
+          ls -R "dist/ABS Spike.app/Contents" | head -40
+
+      - name: Verify code signature (PyInstaller ad-hoc signs on macOS)
+        run: |
+          codesign --verify --deep --verbose=2 "spike/dist/ABS Spike.app"
+
+      - name: Smoke test — run the bundled app headlessly
+        run: |
+          "spike/dist/ABS Spike.app/Contents/MacOS/ABS Spike" --selftest
+
+      - name: Zip with ditto (preserves executable bits and symlinks)
+        run: |
+          ditto -c -k --keepParent "spike/dist/ABS Spike.app" "ABS-Spike-macos-arm64.zip"
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ABS-Spike-macos-arm64
+          path: ABS-Spike-macos-arm64.zip
+          if-no-files-found: error
