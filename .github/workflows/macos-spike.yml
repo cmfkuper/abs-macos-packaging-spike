@@ -170,3 +170,87 @@ jobs:
           name: ABS-Spike-macos-arm64
           path: ABS-Spike-macos-arm64.zip
           if-no-files-found: error
+
+  build-webview-app:
+    # Gated on build-app so the ffmpeg functional test stays a hard gate.
+    needs: build-app
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore the LGPL ffmpeg build
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: spike/bin/ffmpeg
+          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v3
+
+      - name: Build LGPL ffmpeg from official source (cache fallback)
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 -o ffmpeg-src.tar.xz \
+            "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+          tar xf ffmpeg-src.tar.xz
+          cd "ffmpeg-${FFMPEG_VERSION}"
+          ./configure \
+            --disable-everything --disable-autodetect --disable-network \
+            --disable-doc --disable-debug --enable-static --disable-shared \
+            --disable-ffplay --disable-ffprobe \
+            --enable-protocol=file,pipe \
+            --enable-indev=lavfi \
+            --enable-demuxer=wav,aiff,concat,mov,ffmetadata,image2 \
+            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac,mjpeg,wrapped_avframe \
+            --enable-parser=aac,mjpeg \
+            --enable-encoder=aac,pcm_s16be,mjpeg \
+            --enable-muxer=ipod,mp4,aiff,image2,null \
+            --enable-filter=aresample,aformat,anull,anullsrc,color,scale,format
+          make -j"$(sysctl -n hw.ncpu)"
+          mkdir -p ../spike/bin
+          cp ffmpeg ../spike/bin/ffmpeg
+
+      - name: Install pywebview and PyInstaller
+        run: |
+          pip install pywebview pyinstaller
+          python -c "import webview; print('pywebview', webview.__version__)"
+          pip list | grep -i "pyobjc\|pywebview\|pyinstaller"
+
+      - name: Build the pywebview .app bundle
+        working-directory: spike
+        run: |
+          chmod +x bin/ffmpeg
+          pyinstaller --noconfirm --windowed \
+            --name "ABS Webview Spike" \
+            --osx-bundle-identifier "com.chris.abs-webview-spike" \
+            --add-binary "bin/ffmpeg:." \
+            --hidden-import webview.platforms.cocoa \
+            webview_testapp.py
+          echo "--- bundle size ---"
+          du -sh "dist/ABS Webview Spike.app"
+
+      - name: Verify code signature
+        run: codesign --verify --deep --verbose=2 "spike/dist/ABS Webview Spike.app"
+
+      - name: Self test — imports and bundled ffmpeg inside the .app
+        run: |
+          "spike/dist/ABS Webview Spike.app/Contents/MacOS/ABS Webview Spike" --selftest
+
+      - name: Bridge test — real window, JS→Python→JS round trip inside the .app
+        run: |
+          "spike/dist/ABS Webview Spike.app/Contents/MacOS/ABS Webview Spike" --bridgetest
+
+      - name: Zip with ditto
+        run: |
+          ditto -c -k --keepParent "spike/dist/ABS Webview Spike.app" "ABS-Webview-Spike-macos-arm64.zip"
+          ls -l ABS-Webview-Spike-macos-arm64.zip
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ABS-Webview-Spike-macos-arm64
+          path: ABS-Webview-Spike-macos-arm64.zip
+          if-no-files-found: error
