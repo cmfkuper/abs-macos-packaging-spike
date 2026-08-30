@@ -78,7 +78,7 @@ class Backend:
     def choose_output_folder(self):
         """Native folder picker; validate, persist, and report."""
         result = self.window.create_file_dialog(
-            webview.FOLDER_DIALOG, directory=str(self.settings.output_root))
+            webview.FileDialog.FOLDER, directory=str(self.settings.output_root))
         if not result:
             return self._output_status()  # cancelled — report current state
         chosen = Path(result[0])
