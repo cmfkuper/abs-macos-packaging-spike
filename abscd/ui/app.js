@@ -149,10 +149,15 @@ function init() {
       show("form-error", true);
     }
     applyOutputStatus(info);
+    $("quality").value = info.audio_quality;
   });
 
   $("change-output-btn").addEventListener("click", () => {
     window.pywebview.api.choose_output_folder().then(applyOutputStatus);
+  });
+
+  $("quality").addEventListener("change", () => {
+    window.pywebview.api.set_audio_quality($("quality").value);
   });
 
   $("start-btn").addEventListener("click", startRip);

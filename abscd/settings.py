@@ -40,11 +40,22 @@ def default_output_root() -> Path:
     return Path(__file__).resolve().parent.parent / "Output"
 
 
+# Audio quality tiers. Constant bitrate, source sample rate (44.1 kHz) kept —
+# no resampling. The MB/hour figures are measured from real encodes, not
+# nominal math (see git history for the verification run).
+QUALITY_TIERS = {
+    "good":   {"bitrate": "48k",  "channels": 1},
+    "better": {"bitrate": "64k",  "channels": 1},
+    "best":   {"bitrate": "128k", "channels": 2},
+}
+
+
 class Settings:
     """Flat key/value store backed by settings.json. Add keys freely."""
 
     DEFAULTS = {
         # output_root is special-cased in get(): its default is computed.
+        "audio_quality": "better",
     }
 
     def __init__(self, path: Path | None = None):
@@ -98,6 +109,17 @@ class Settings:
     @output_root.setter
     def output_root(self, value: Path | str) -> None:
         self.set("output_root", str(value))
+
+    @property
+    def audio_quality(self) -> str:
+        tier = self.get("audio_quality")
+        return tier if tier in QUALITY_TIERS else self.DEFAULTS["audio_quality"]
+
+    @audio_quality.setter
+    def audio_quality(self, value: str) -> None:
+        if value not in QUALITY_TIERS:
+            raise ValueError(f"Unknown audio quality tier: {value!r}")
+        self.set("audio_quality", value)
 
 
 def check_output_folder(path: Path) -> str | None:

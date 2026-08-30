@@ -22,6 +22,7 @@ label input, label select {
   box-sizing: border-box;
 }
 label select { width: 6rem; }
+label select#quality { width: 100%; }
 
 button { font-size: 0.95rem; padding: 0.4rem 1rem; cursor: pointer; }
 button.big { font-size: 1.05rem; padding: 0.55rem 1.3rem; margin-top: 0.8rem; }

@@ -17,7 +17,7 @@ from pathlib import Path
 import webview
 
 from . import cdrom, engine
-from .settings import Settings, check_output_folder
+from .settings import QUALITY_TIERS, Settings, check_output_folder
 
 PROGRESS_MIN_INTERVAL = 0.1  # seconds between progress pushes to the bridge
 
@@ -41,6 +41,9 @@ class JsApi:
 
     def choose_output_folder(self):
         return self._backend.choose_output_folder()
+
+    def set_audio_quality(self, tier):
+        return self._backend.set_audio_quality(tier)
 
 
 class Backend:
@@ -94,7 +97,16 @@ class Backend:
     # ---------- JS -> Python API (exposed as window.pywebview.api) ----------
 
     def get_init(self):
-        return {"drives": cdrom.list_optical_drives(), **self._output_status()}
+        return {"drives": cdrom.list_optical_drives(),
+                "audio_quality": self.settings.audio_quality,
+                **self._output_status()}
+
+    def set_audio_quality(self, tier: str):
+        if tier not in QUALITY_TIERS:
+            return {"ok": False, "error": f"Unknown quality tier: {tier}"}
+        self.settings.audio_quality = tier
+        self.settings.save()
+        return {"ok": True, "audio_quality": tier}
 
     def start_job(self, author: str, title: str, year: str, drive: str):
         author, title, year = author.strip(), title.strip(), year.strip()
@@ -239,7 +251,9 @@ class Backend:
                     break
 
             self._emit("assembling")
-            encoder = engine.Encoder(job, bitrate="96k", channels=2)
+            tier = QUALITY_TIERS[self.settings.audio_quality]
+            encoder = engine.Encoder(
+                job, bitrate=tier["bitrate"], channels=tier["channels"])
             self._emit("stage", text="Assembling discs and converting to M4B…")
             self._emit("progress", done=0, total=1)
             out = encoder.encode(
