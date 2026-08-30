@@ -65,12 +65,15 @@ jobs:
           echo "--- version banner ---"
           spike/bin/ffmpeg -version
           echo "--- license (ffmpeg -L) ---"
-          spike/bin/ffmpeg -L 2>&1 | head -6
+          spike/bin/ffmpeg -hide_banner -L 2>&1 | head -8
           echo "--- assertions ---"
           if spike/bin/ffmpeg -version | grep -q "enable-gpl"; then
             echo "FAIL: --enable-gpl found in configuration"; exit 1
           fi
-          spike/bin/ffmpeg -L 2>&1 | grep -qi "LGPL" || { echo "FAIL: banner does not say LGPL"; exit 1; }
+          # LGPL builds print "GNU Lesser General Public License"; GPL builds
+          # print "GNU General Public License" without "Lesser".
+          spike/bin/ffmpeg -hide_banner -L 2>&1 | grep -qi "Lesser General Public License" \
+            || { echo "FAIL: license text is not LGPL"; exit 1; }
           echo "OK: LGPL build, no --enable-gpl"
 
       - name: Install PyInstaller
