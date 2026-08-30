@@ -27,3 +27,6 @@ Thumbs.db
 
 # Generated UI bundle (built by tools/build_ui.py)
 abscd/ui_bundle.py
+
+# Design exports / mockups in the project root (not app source)
+/*.html
