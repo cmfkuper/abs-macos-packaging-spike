@@ -216,7 +216,7 @@ jobs:
       - name: Install pywebview and PyInstaller
         run: |
           pip install pywebview pyinstaller
-          python -c "import webview; print('pywebview', webview.__version__)"
+          python -c "import webview; print('pywebview imported from', webview.__file__)"
           pip list | grep -i "pyobjc\|pywebview\|pyinstaller"
 
       - name: Build the pywebview .app bundle
