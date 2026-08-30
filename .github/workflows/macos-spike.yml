@@ -131,7 +131,7 @@ jobs:
           grep -qi "mjpeg" info.txt                  || { echo "FAIL: no mjpeg cover stream"; exit 1; }
 
           echo "=== decode the whole book back (proves AAC+cover decode) ==="
-          "$FF" -hide_banner -y -i book.m4b -map 0:a -f null -
+          "$FF" -hide_banner -y -i book.m4b -map 0:a -c:a pcm_s16be -f null -
 
           echo "=== extract the cover back out ==="
           "$FF" -hide_banner -y -i book.m4b -map 0:v -c copy -frames:v 1 cover_out.jpg
