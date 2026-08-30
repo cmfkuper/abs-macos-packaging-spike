@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Audiobook CD → M4B</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Screen 1: the three questions -->
+<div id="screen-form">
+  <h1>Rip an audiobook</h1>
+  <p class="dim">Answer the questions, insert Disc 1, and press Start.</p>
+
+  <label>Author
+    <input type="text" id="author" autofocus>
+  </label>
+  <label>Book title
+    <input type="text" id="title">
+  </label>
+  <label>Date recorded
+    <input type="text" id="year">
+  </label>
+  <label>CD drive
+    <select id="drive"></select>
+  </label>
+
+  <div id="form-error" class="error" hidden></div>
+  <button id="start-btn" class="big">Start ripping</button>
+</div>
+
+<!-- Screen 2: progress and the disc flow -->
+<div id="screen-progress" hidden>
+  <h1 id="book-heading"></h1>
+  <p id="stage" class="dim"></p>
+
+  <div class="bar-outer"><div id="bar" class="bar-inner"></div></div>
+  <div id="percent" class="dim mono"></div>
+
+  <ul id="disc-list"></ul>
+
+  <pre id="log"></pre>
+
+  <div id="disc-buttons" hidden>
+    <button id="next-btn" class="big"></button>
+    <button id="assemble-btn" class="big">Assemble into M4B</button>
+  </div>
+
+  <div id="confirm-cancel" hidden>
+    <span>Stop ripping this audiobook?</span>
+    <button id="confirm-yes">Yes, stop</button>
+    <button id="confirm-no">Keep going</button>
+  </div>
+
+  <div id="end-buttons">
+    <button id="cancel-btn">Cancel</button>
+    <button id="again-btn" class="big" hidden>Rip another book</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

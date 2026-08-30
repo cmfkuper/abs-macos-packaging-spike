@@ -24,3 +24,6 @@ _rip/
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Generated UI bundle (built by tools/build_ui.py)
+abscd/ui_bundle.py

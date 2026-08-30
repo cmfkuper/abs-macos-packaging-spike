@@ -1,0 +1,244 @@
+"""pywebview front end. Same worker/queue threading model as the tkinter
+version: the rip runs on a daemon thread and communicates only through the
+event queue; a dispatcher thread pushes each event to JS via evaluate_js.
+
+Python -> JS: window.evaluate_js("onEvent({...})")  (push, throttled)
+JS -> Python: window.pywebview.api.*                (js_api bridge)
+"""
+
+from __future__ import annotations
+
+import json
+import queue
+import threading
+import time
+from pathlib import Path
+
+import webview
+
+from . import cdrom, engine
+
+PROGRESS_MIN_INTERVAL = 0.1  # seconds between progress pushes to the bridge
+
+
+class JsApi:
+    """The only object exposed to JavaScript. Kept deliberately tiny so
+    pywebview's API introspection never walks Backend internals (exposing
+    Backend directly makes it recurse into the native window object)."""
+
+    def __init__(self, backend: "Backend"):
+        self._backend = backend
+
+    def get_init(self):
+        return self._backend.get_init()
+
+    def start_job(self, author, title, year, drive):
+        return self._backend.start_job(author, title, year, drive)
+
+    def answer(self, value):
+        return self._backend.answer(value)
+
+
+class Backend:
+    def __init__(self, output_root: Path):
+        self.output_root = output_root
+        self.window: webview.Window | None = None
+        self.events: queue.Queue = queue.Queue()
+        self.worker: threading.Thread | None = None
+        self.cancel_flag = threading.Event()
+        self.disc_answer: queue.Queue = queue.Queue()
+        self.job: engine.Job | None = None
+        self._close_armed_until = 0.0
+
+    # ---------- JS -> Python API (exposed as window.pywebview.api) ----------
+
+    def get_init(self):
+        return {"drives": cdrom.list_optical_drives()}
+
+    def start_job(self, author: str, title: str, year: str, drive: str):
+        author, title, year = author.strip(), title.strip(), year.strip()
+        drive = (drive or "").strip().rstrip(":")
+        if self.worker and self.worker.is_alive():
+            return {"ok": False, "error": "A rip is already in progress."}
+        if not author or not title or not year:
+            return {"ok": False,
+                    "error": "Please fill in the author, book title, and date recorded."}
+        if not drive:
+            return {"ok": False, "error": "No optical drive was found on this computer."}
+        if not engine.locate_ffmpeg():
+            return {"ok": False, "error":
+                    "ffmpeg is required to build the M4B but was not found. "
+                    "Install it with:  winget install Gyan.FFmpeg  and restart."}
+
+        self.job = engine.Job.create(self.output_root, author, title, year)
+        self.cancel_flag.clear()
+        while not self.disc_answer.empty():  # drop stale answers from a prior run
+            self.disc_answer.get_nowait()
+        self.worker = threading.Thread(
+            target=self._run_job, args=(cdrom.OpticalDrive(drive),), daemon=True)
+        self.worker.start()
+        return {"ok": True}
+
+    def answer(self, value: str):
+        """'next' / 'assemble' from the disc buttons, 'cancel' from the dialog."""
+        if value == "cancel":
+            self.cancel_flag.set()
+        self.disc_answer.put(value)
+        return True
+
+    # ---------- window lifecycle ----------
+
+    def on_closing(self):
+        """Veto the first close while ripping; a second click within 10s quits."""
+        if not (self.worker and self.worker.is_alive()):
+            return True
+        now = time.monotonic()
+        if now < self._close_armed_until:
+            self.cancel_flag.set()
+            self.disc_answer.put("cancel")
+            return True
+        self._close_armed_until = now + 10
+        self._emit("log", text="⚠ A rip is in progress — close again within "
+                               "10 seconds to abort and quit.")
+        return False
+
+    # ---------- Python -> JS event pump ----------
+
+    def _emit(self, kind: str, **payload):
+        self.events.put((kind, payload))
+
+    def dispatch_forever(self):
+        """Drain the event queue into evaluate_js. Coalesces progress bursts:
+        only the newest progress event is pushed, at most every 100 ms."""
+        last_progress_push = 0.0
+        while True:
+            kind, payload = self.events.get()
+            if kind == "progress":
+                # Collapse any queued-up progress events into the latest one.
+                try:
+                    while True:
+                        nk, np = self.events.queue[0], None
+                        if nk[0] != "progress":
+                            break
+                        kind, payload = self.events.get_nowait()
+                except (IndexError, queue.Empty):
+                    pass
+                now = time.monotonic()
+                if now - last_progress_push < PROGRESS_MIN_INTERVAL \
+                        and payload.get("done", 0) < payload.get("total", 1):
+                    continue
+                last_progress_push = now
+            self._push(kind, payload)
+
+    def _push(self, kind: str, payload: dict):
+        if self.window is None:
+            return
+        event = json.dumps({"kind": kind, **payload})
+        try:
+            self.window.evaluate_js(f"window.onEvent({event})")
+        except Exception:
+            pass  # window closing; nothing sensible to do
+
+    # ---------- worker thread (logic identical to the tkinter version) ----------
+
+    def _run_job(self, drive: cdrom.OpticalDrive):
+        job = self.job
+        cancelled = self.cancel_flag.is_set
+        try:
+            ripper = engine.Ripper(job, drive)
+            resumed = sorted(d.number for d in job.discs)
+            for d in job.discs:
+                self._emit("disc_status", number=d.number, state="done", tracks=d.tracks)
+            if resumed:
+                self._emit("log", text=f"Found discs {resumed} already ripped — resuming.")
+            disc_number = (max(resumed) + 1) if resumed else 1
+
+            while True:
+                self._emit("stage", text=f"Insert Disc {disc_number} and close the tray…")
+                self._emit("progress", done=0, total=1)
+                toc = engine.wait_for_disc(drive, should_cancel=cancelled)
+
+                seen = job.seen_disc(toc.disc_id)
+                if seen is not None:
+                    self._emit("log", text=(
+                        f"⚠ This looks like Disc {seen.number}, which is already ripped. "
+                        f"Swap in Disc {disc_number}."))
+                    drive.eject()
+                    self._wait_for_removal(drive, cancelled)
+                    continue
+
+                minutes = toc.seconds / 60
+                self._emit("stage",
+                           text=f"{job.base_name}, Disc {disc_number} — "
+                                f"{len(toc.audio_tracks)} tracks, {minutes:.0f} min")
+                self._emit("disc_status", number=disc_number, state="ripping", tracks=0)
+                record = ripper.rip_disc(
+                    toc, disc_number,
+                    progress=lambda d, t: self._emit("progress", done=d, total=t),
+                    status=lambda s: self._emit("stage", text=s),
+                    should_cancel=cancelled,
+                )
+                note = f" ({ripper.bad_sectors} unreadable sectors patched)" \
+                    if ripper.bad_sectors else ""
+                self._emit("disc_status", number=record.number, state="done",
+                           tracks=record.tracks)
+                self._emit("log", text=f"✔ Disc {record.number} ripped — "
+                                       f"{record.tracks} tracks{note}")
+                drive.eject()
+                disc_number += 1
+
+                self._emit("ask_disc", next_number=disc_number)
+                answer = self.disc_answer.get()
+                if answer == "cancel":
+                    raise engine.EngineError("Cancelled")
+                if answer == "assemble":
+                    break
+
+            self._emit("assembling")
+            encoder = engine.Encoder(job, bitrate="96k", channels=2)
+            self._emit("stage", text="Assembling discs and converting to M4B…")
+            self._emit("progress", done=0, total=1)
+            out = encoder.encode(
+                progress=lambda d, t: self._emit("progress", done=d, total=t),
+                status=lambda s: self._emit("stage", text=s),
+                should_cancel=cancelled,
+            )
+            size_mb = out.stat().st_size / (1024 * 1024)
+            job.cleanup()
+            self._emit("log", text=f"✔ Wrote {out.name} ({size_mb:.0f} MB)")
+            self._emit("finished", path=str(out), size_mb=round(size_mb))
+        except engine.EngineError as exc:
+            if str(exc) == "Cancelled":
+                self._emit("aborted", text="Cancelled. Ripped discs were kept — "
+                                           "the same book resumes where it left off.")
+            else:
+                self._emit("aborted", text=f"Error: {exc}")
+        except cdrom.DriveError as exc:
+            self._emit("aborted", text=f"Drive error: {exc}")
+        except Exception as exc:  # noqa: BLE001 — surface anything to the UI
+            self._emit("aborted", text=f"Unexpected error: {exc!r}")
+
+    @staticmethod
+    def _wait_for_removal(drive: cdrom.OpticalDrive, should_cancel):
+        while drive.has_disc():
+            if should_cancel():
+                raise engine.EngineError("Cancelled")
+            time.sleep(1.5)
+
+
+def main():
+    from .uiassets import load_html
+
+    project_root = Path(__file__).resolve().parent.parent
+    backend = Backend(output_root=project_root / "Output")
+    window = webview.create_window(
+        "Audiobook CD → M4B", html=load_html(), js_api=JsApi(backend),
+        width=680, height=640, min_size=(560, 480))
+    backend.window = window
+    window.events.closing += backend.on_closing
+    threading.Thread(target=backend.dispatch_forever, daemon=True).start()
+    webview.start(window)
+
+
+if __name__ == "__main__":
+    main()

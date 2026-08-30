@@ -1,0 +1,64 @@
+/* Deliberately plain — parity port only, restyling comes later. */
+
+body {
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  margin: 2rem;
+  max-width: 620px;
+}
+
+h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
+
+.dim  { color: #666; }
+.mono { font-family: Consolas, monospace; }
+.error { color: #b00020; margin: 0.5rem 0; }
+
+label { display: block; margin: 0.7rem 0; }
+label input, label select {
+  display: block;
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.35rem;
+  margin-top: 0.2rem;
+  box-sizing: border-box;
+}
+label select { width: 6rem; }
+
+button { font-size: 0.95rem; padding: 0.4rem 1rem; cursor: pointer; }
+button.big { font-size: 1.05rem; padding: 0.55rem 1.3rem; margin-top: 0.8rem; }
+
+.bar-outer {
+  border: 1px solid #999;
+  height: 1.1rem;
+  margin-top: 0.8rem;
+  background: #eee;
+}
+.bar-inner {
+  height: 100%;
+  width: 0%;
+  background: #4f8cff;
+  transition: width 120ms linear;
+}
+#percent { text-align: right; margin: 0.2rem 0 0.8rem; }
+
+#disc-list { list-style: none; padding: 0; margin: 0 0 0.8rem; }
+#disc-list li { padding: 0.1rem 0; }
+
+#log {
+  background: #f4f4f4;
+  border: 1px solid #ddd;
+  padding: 0.6rem;
+  min-height: 6rem;
+  white-space: pre-wrap;
+  font-family: Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+#disc-buttons button { margin-right: 0.6rem; }
+#confirm-cancel {
+  background: #fff3e0;
+  border: 1px solid #e0a93e;
+  padding: 0.6rem;
+  margin: 0.6rem 0;
+}
+#confirm-cancel button { margin-left: 0.6rem; }
+#end-buttons { margin-top: 0.8rem; }
