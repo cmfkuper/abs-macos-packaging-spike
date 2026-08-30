@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: spike/bin/ffmpeg
-          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v2
+          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v3
 
       - name: Build LGPL ffmpeg from official source (AAC/M4B only)
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
@@ -48,7 +48,7 @@ jobs:
             --enable-protocol=file,pipe \
             --enable-indev=lavfi \
             --enable-demuxer=wav,aiff,concat,mov,ffmetadata,image2 \
-            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac,mjpeg \
+            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac,mjpeg,wrapped_avframe \
             --enable-parser=aac,mjpeg \
             --enable-encoder=aac,pcm_s16be,mjpeg \
             --enable-muxer=ipod,mp4,aiff,image2,null \
