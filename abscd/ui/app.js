@@ -1,126 +1,229 @@
-/* Frontend logic. All communication with Python goes through
-   window.pywebview.api (JS -> Python) and window.onEvent (Python -> JS). */
+/* Audiobook Bob frontend. Same event protocol as before:
+   Python -> JS: window.onEvent({kind, ...})   (evaluate_js push)
+   JS -> Python: window.pywebview.api.*        (js_api bridge)      */
 
 "use strict";
 
 const $ = (id) => document.getElementById(id);
+const show = (id, visible) => { $(id).hidden = !visible; };
 
-let logLines = [];
-let discs = {};       // number -> {state, tracks}
-let ripActive = false;
+/* Quality tier labels shown in the pixel dropdown (measured MB/hour). */
+const QUALITY_ITEMS = [
+  { value: "good",   label: "Good — 48 kbps mono (~23 MB per hour)" },
+  { value: "better", label: "Better — 64 kbps mono (~30 MB per hour)" },
+  { value: "best",   label: "Best — 128 kbps stereo (~59 MB per hour)" },
+];
 
-/* ---------- helpers ---------- */
+const state = {
+  screen: "setup",        // setup | ripping | assembling
+  ripActive: false,
+  discs: {},              // number -> {state, tracks}
+  elapsedTimer: null,
+  elapsedStart: 0,
+};
 
-function show(id, visible) { $(id).hidden = !visible; }
+/* ---------------- custom pixel dropdowns ---------------- */
 
-function setStage(text) { $("stage").textContent = text; }
+function makeDropdown(rootId, onChange) {
+  const root = $(rootId), val = $(rootId + "-val"), list = $(rootId + "-list");
+  const dd = { items: [], value: null };
 
-function setProgress(done, total) {
-  const pct = total > 1 ? (100 * done / total) : 0;
-  $("bar").style.width = pct.toFixed(1) + "%";
-  $("percent").textContent = total > 1 ? pct.toFixed(1) + " %" : "";
+  function render() {
+    list.innerHTML = "";
+    dd.items.forEach((item) => {
+      const el = document.createElement("div");
+      el.className = "opt" + (item.value === dd.value ? " sel" : "");
+      el.textContent = item.label;
+      el.addEventListener("mousedown", (e) => {   // mousedown beats focusout
+        e.preventDefault();
+        dd.set(item.value);
+        close();
+        if (onChange) onChange(item.value);
+      });
+      list.appendChild(el);
+    });
+  }
+  function open() { if (dd.items.length) { render(); show(rootId + "-list", true); root.classList.add("open"); } }
+  function close() { show(rootId + "-list", false); root.classList.remove("open"); }
+  const isOpen = () => !list.hidden;
+
+  dd.set = (value) => {
+    const item = dd.items.find((i) => i.value === value);
+    dd.value = item ? item.value : null;
+    val.textContent = item ? item.label : "";
+  };
+  dd.setItems = (items, value) => { dd.items = items; dd.set(value); };
+
+  root.addEventListener("click", (e) => {
+    if (e.target.closest(".ddlist")) return;
+    isOpen() ? close() : open();
+  });
+  root.addEventListener("blur", close);
+  root.addEventListener("keydown", (e) => {
+    const idx = dd.items.findIndex((i) => i.value === dd.value);
+    if (e.key === "Enter" || e.key === " ") { isOpen() ? close() : open(); e.preventDefault(); }
+    else if (e.key === "Escape") close();
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const next = idx + (e.key === "ArrowDown" ? 1 : -1);
+      if (next >= 0 && next < dd.items.length) {
+        dd.set(dd.items[next].value);
+        if (isOpen()) render();
+        if (onChange) onChange(dd.value);
+      }
+      e.preventDefault();
+    }
+  });
+  return dd;
 }
 
-function addLog(text) {
-  logLines.push(text);
-  $("log").textContent = logLines.slice(-12).join("\n");
+let ddDrive, ddQuality;
+
+/* ---------------- screens & status bar ---------------- */
+
+const TITLES = { setup: "Audiobook Bob — Setup", ripping: "Audiobook Bob — Ripping",
+                 assembling: "Audiobook Bob — Assembling" };
+
+function toScreen(name) {
+  state.screen = name;
+  ["setup", "ripping", "assembling"].forEach((s) => show("screen-" + s, s === name));
+  $("tbar-title").textContent = TITLES[name];
 }
+
+function setStatus(text) { $("st-main").textContent = text; }
+function setMid(html) { $("st-mid").innerHTML = html; }
+
+function startElapsed() {
+  stopElapsed();
+  state.elapsedStart = Date.now();
+  show("st-elapsed", true);
+  const tick = () => {
+    const s = Math.floor((Date.now() - state.elapsedStart) / 1000);
+    $("st-elapsed").textContent =
+      "Elapsed " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+  tick();
+  state.elapsedTimer = setInterval(tick, 1000);
+}
+function stopElapsed() {
+  if (state.elapsedTimer) clearInterval(state.elapsedTimer);
+  state.elapsedTimer = null;
+}
+
+/* ---------------- progress ---------------- */
+
+function setBar(fillId, labelId, done, total) {
+  const pct = total > 0 ? Math.max(0, Math.min(100, 100 * done / total)) : 0;
+  $(fillId).style.width = pct.toFixed(1) + "%";
+  $(labelId).textContent = pct.toFixed(0) + "%";
+}
+
+/* Assembling scene: pre-floored integers, pure calc() in CSS (no round/mod). */
+function setAsmProgress(p) {
+  p = Math.max(0, Math.min(1, p));
+  const scene = $("asm-anim");
+  const row = Math.floor(p * 64);
+  scene.style.setProperty("--row", row);
+  scene.style.setProperty("--flip", row % 2);
+  scene.style.setProperty("--revpx", Math.floor(p * 60));
+  scene.style.setProperty("--edgeon", row >= 64 ? 0 : 1);
+}
+
+/* ---------------- disc list ---------------- */
 
 function renderDiscs() {
-  const ul = $("disc-list");
-  ul.innerHTML = "";
-  Object.keys(discs).map(Number).sort((a, b) => a - b).forEach((n) => {
-    const d = discs[n];
-    const li = document.createElement("li");
-    let text = "Disc " + n + ": ";
-    if (d.state === "ripping") text += "ripping…";
-    else if (d.state === "done") text += "ripped — " + d.tracks + " chapters";
-    else text += d.state;
-    li.textContent = text;
-    ul.appendChild(li);
+  const box = $("disc-list");
+  box.innerHTML = "";
+  const nums = Object.keys(state.discs).map(Number).sort((a, b) => a - b);
+  nums.forEach((n) => {
+    const d = state.discs[n];
+    const row = document.createElement("div");
+    row.className = "drow";
+    if (d.state === "done") {
+      row.innerHTML = '<span class="chk">&#10003;</span><span class="num">Disc ' + n +
+        "</span><span>" + d.tracks + (d.tracks === 1 ? " chapter" : " chapters") + "</span>";
+    } else {
+      row.innerHTML = '<span class="chk">&nbsp;</span><span class="num">Disc ' + n +
+        "</span><span>ripping&#8230;</span>";
+    }
+    box.appendChild(row);
   });
+  const done = nums.filter((n) => state.discs[n].state === "done").length;
+  setMid('<span class="ok">' + done + (done === 1 ? " disc" : " discs") + " done</span>");
+  return done;
 }
 
-/* ---------- events pushed from Python ---------- */
+/* ---------------- events pushed from Python ---------------- */
 
 window.onEvent = function (ev) {
   switch (ev.kind) {
     case "stage":
-      setStage(ev.text);
-      break;
-    case "progress":
-      setProgress(ev.done, ev.total);
+      setStatus(ev.text);
       break;
     case "log":
-      addLog(ev.text);
+      setStatus(ev.text);
+      break;
+    case "progress":
+      if (state.screen === "ripping") setBar("rip-fill", "rip-label", ev.done, ev.total);
+      else if (state.screen === "assembling") {
+        setBar("asm-fill", "asm-label", ev.done, ev.total);
+        setAsmProgress(ev.total > 0 ? ev.done / ev.total : 0);
+      }
       break;
     case "disc_status":
-      discs[ev.number] = { state: ev.state, tracks: ev.tracks || 0 };
+      state.discs[ev.number] = { state: ev.state, tracks: ev.tracks || 0 };
+      if (ev.state === "ripping") $("rip-discnum").textContent = ev.number;
       renderDiscs();
       break;
     case "ask_disc":
-      setStage("Disc ejected. Insert Disc " + ev.next_number +
-               ", or assemble the book.");
-      setProgress(0, 1);
+      $("rip-discnum").textContent = ev.next_number;
       $("next-btn").textContent = "Rip Disc " + ev.next_number;
-      show("disc-buttons", true);
+      $("next-btn").disabled = false;
+      $("assemble-btn").disabled = false;
+      setBar("rip-fill", "rip-label", 0, 1);
+      setStatus("Disc ejected. Insert Disc " + ev.next_number + ", or assemble the book.");
       break;
-    case "assembling":
-      show("disc-buttons", false);
+    case "assembling": {
+      const done = renderDiscs();
+      $("asm-title").textContent = $("rip-title").textContent;
+      $("asm-disccount").textContent = ev.discs || done;
+      $("asm-path").textContent = ev.path || "";
+      setBar("asm-fill", "asm-label", 0, 1);
+      setAsmProgress(0);
+      setMid('<span class="ok">All discs ripped</span>');
+      toScreen("assembling");
+      startElapsed();
       break;
+    }
     case "finished":
-      ripActive = false;
-      setStage("Done! Your audiobook is ready.");
-      setProgress(1, 1);
-      addLog("Saved: " + ev.path);
-      show("disc-buttons", false);
-      show("cancel-btn", false);
-      show("again-btn", true);
+      state.ripActive = false;
+      stopElapsed();
+      setBar("asm-fill", "asm-label", 1, 1);
+      setAsmProgress(1);
+      $("asm-path").textContent = ev.path;
+      setStatus("Done! Your audiobook is ready (" + ev.size_mb + " MB).");
+      show("asm-cancel-btn", false);
+      show("asm-again-btn", true);
       break;
     case "aborted":
-      ripActive = false;
-      setStage(ev.text);
-      show("disc-buttons", false);
-      show("cancel-btn", false);
-      show("again-btn", true);
+      state.ripActive = false;
+      stopElapsed();
+      setStatus(ev.text);
+      if (state.screen === "ripping") {
+        $("next-btn").disabled = true;
+        $("assemble-btn").disabled = true;
+        show("cancel-rip-btn", false);
+        show("confirm-rip", false);
+        show("again-btn", true);
+      } else if (state.screen === "assembling") {
+        show("asm-cancel-btn", false);
+        show("confirm-asm", false);
+        show("asm-again-btn", true);
+      }
       break;
   }
 };
 
-/* ---------- user actions (JS -> Python) ---------- */
-
-function startRip() {
-  const author = $("author").value.trim();
-  const title = $("title").value.trim();
-  const year = $("year").value.trim();
-  const drive = $("drive").value;
-  window.pywebview.api.start_job(author, title, year, drive).then((res) => {
-    if (!res.ok) {
-      $("form-error").textContent = res.error;
-      show("form-error", true);
-      return;
-    }
-    show("form-error", false);
-    logLines = [];
-    discs = {};
-    ripActive = true;
-    $("log").textContent = "";
-    renderDiscs();
-    $("book-heading").textContent = title + " — " + author + " (" + year + ")";
-    show("screen-form", false);
-    show("screen-progress", true);
-    show("again-btn", false);
-    show("cancel-btn", true);
-    show("disc-buttons", false);
-  });
-}
-
-function backToForm() {
-  ["author", "title", "year"].forEach((id) => { $(id).value = ""; });
-  show("screen-progress", false);
-  show("screen-form", true);
-  $("author").focus();
-}
+/* ---------------- user actions ---------------- */
 
 function applyOutputStatus(info) {
   $("output-path").textContent = info.output_root;
@@ -134,56 +237,117 @@ function applyOutputStatus(info) {
   $("start-btn").disabled = !info.output_ok;
 }
 
-function init() {
+function startRip() {
+  const author = $("author").value.trim();
+  const title = $("title").value.trim();
+  const year = $("year").value.trim();
+  window.pywebview.api.start_job(author, title, year, ddDrive.value || "").then((res) => {
+    if (!res.ok) {
+      $("form-error").textContent = res.error;
+      show("form-error", true);
+      return;
+    }
+    show("form-error", false);
+    state.discs = {};
+    state.ripActive = true;
+    $("rip-title").textContent = title;
+    $("rip-discnum").textContent = "1";
+    $("next-btn").disabled = true;
+    $("assemble-btn").disabled = true;
+    show("cancel-rip-btn", true);
+    show("again-btn", false);
+    show("confirm-rip", false);
+    setBar("rip-fill", "rip-label", 0, 1);
+    renderDiscs();
+    setMid('<span class="ok">0 discs done</span>');
+    toScreen("ripping");
+    startElapsed();
+  });
+}
+
+function backToSetup() {
+  ["author", "title", "year"].forEach((id) => { $(id).value = ""; });
+  stopElapsed();
+  show("st-elapsed", false);
+  setStatus("Ready");
+  $("st-mid").textContent = "No disc in drive";
+  show("again-btn", false);
+  show("asm-again-btn", false);
+  show("cancel-rip-btn", true);
+  show("asm-cancel-btn", true);
+  toScreen("setup");
   window.pywebview.api.get_init().then((info) => {
-    const sel = $("drive");
-    sel.innerHTML = "";
-    info.drives.forEach((d) => {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = d + ":";
-      sel.appendChild(opt);
-    });
+    ddDrive.setItems(info.drives.map((d) => ({ value: d, label: d + ":" })),
+                     info.drives[0] || null);
+    applyOutputStatus(info);
+  });
+  $("author").focus();
+}
+
+function init() {
+  ddDrive = makeDropdown("dd-drive", null);
+  ddQuality = makeDropdown("dd-quality", (tier) => {
+    window.pywebview.api.set_audio_quality(tier);
+  });
+
+  window.pywebview.api.get_init().then((info) => {
+    ddDrive.setItems(info.drives.map((d) => ({ value: d, label: d + ":" })),
+                     info.drives[0] || null);
+    ddQuality.setItems(QUALITY_ITEMS, info.audio_quality);
+    applyOutputStatus(info);
     if (info.drives.length === 0) {
       $("form-error").textContent = "No optical drive was found on this computer.";
       show("form-error", true);
     }
-    applyOutputStatus(info);
-    $("quality").value = info.audio_quality;
   });
 
+  /* title bar */
+  $("btn-min").addEventListener("click", () => window.pywebview.api.minimize());
+  $("btn-close").addEventListener("click", () => window.pywebview.api.close_window());
+
+  /* screen 1 */
   $("change-output-btn").addEventListener("click", () => {
     window.pywebview.api.choose_output_folder().then(applyOutputStatus);
   });
-
-  $("quality").addEventListener("change", () => {
-    window.pywebview.api.set_audio_quality($("quality").value);
+  $("start-btn").addEventListener("click", startRip);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && state.screen === "setup" && !$("start-btn").disabled
+        && !e.target.closest(".dd")) startRip();
   });
 
-  $("start-btn").addEventListener("click", startRip);
+  /* screen 2 */
   $("next-btn").addEventListener("click", () => {
-    show("disc-buttons", false);
+    $("next-btn").disabled = true;
+    $("assemble-btn").disabled = true;
     window.pywebview.api.answer("next");
   });
   $("assemble-btn").addEventListener("click", () => {
-    show("disc-buttons", false);
+    $("next-btn").disabled = true;
+    $("assemble-btn").disabled = true;
     window.pywebview.api.answer("assemble");
   });
-  $("cancel-btn").addEventListener("click", () => {
-    if (!ripActive) { backToForm(); return; }
-    show("confirm-cancel", true);
+  $("cancel-rip-btn").addEventListener("click", () => {
+    if (!state.ripActive) { backToSetup(); return; }
+    show("confirm-rip", true);
   });
-  $("confirm-yes").addEventListener("click", () => {
-    show("confirm-cancel", false);
+  $("confirm-rip-yes").addEventListener("click", () => {
+    show("confirm-rip", false);
     window.pywebview.api.answer("cancel");
   });
-  $("confirm-no").addEventListener("click", () => show("confirm-cancel", false));
-  $("again-btn").addEventListener("click", backToForm);
+  $("confirm-rip-no").addEventListener("click", () => show("confirm-rip", false));
+  $("again-btn").addEventListener("click", backToSetup);
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !$("screen-form").hidden
-        && !$("start-btn").disabled) startRip();
+  /* screen 3 */
+  $("asm-cancel-btn").addEventListener("click", () => {
+    if (!state.ripActive) { backToSetup(); return; }
+    show("confirm-asm", true);
   });
+  $("confirm-asm-yes").addEventListener("click", () => {
+    show("confirm-asm", false);
+    window.pywebview.api.answer("cancel");
+  });
+  $("confirm-asm-no").addEventListener("click", () => show("confirm-asm", false));
+  $("asm-again-btn").addEventListener("click", backToSetup);
 }
 
 window.addEventListener("pywebviewready", init);

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ripping — Pixel Animation</title>
+<style>
+:root{
+  /* Set B period palette — matches Field Icons */
+  --b-black:#000000;
+  --b-white:#ffffff;
+  --b-silver:#c0c0c0;
+  --b-gray:#808080;
+  --b-navy:#000080;
+  --b-red:#ff0000;
+  --b-maroon:#800000;
+  --b-olive:#808000;
+  --b-yellow:#ffff00;
+  --b-cyan:#00ffff;
+  --b-green:#008000;
+}
+html,body{margin:0;padding:0;background:transparent}
+.stage{display:block;width:100%;min-width:400px;max-width:900px;margin:0 auto;image-rendering:pixelated}
+svg{shape-rendering:crispEdges}
+/* every animation is frame-stepped: steps(1,end) + opacity toggles, no tweening */
+[class^="l"],[class^="pt"],.wv,.cp,[class^="sg"],.lamp,.led{animation-timing-function:steps(1,end);animation-iteration-count:infinite}
+
+/* -- handwriting: 10 lines over the 8s master loop -- */
+.l1,.l2,.l3,.l4,.l5,.l6,.l7,.l8,.l9,.l10{opacity:0;animation-duration:8s}
+.l1{animation-name:kl1} .l2{animation-name:kl2} .l3{animation-name:kl3} .l4{animation-name:kl4} .l5{animation-name:kl5}
+.l6{animation-name:kl6} .l7{animation-name:kl7} .l8{animation-name:kl8} .l9{animation-name:kl9} .l10{animation-name:kl10}
+@keyframes kl1 {0%{opacity:0}4%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl2 {0%{opacity:0}11%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl3 {0%{opacity:0}18%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl4 {0%{opacity:0}25%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl5 {0%{opacity:0}32%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl6 {0%{opacity:0}39%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl7 {0%{opacity:0}46%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl8 {0%{opacity:0}53%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl9 {0%{opacity:0}60%{opacity:1}76%{opacity:0}100%{opacity:0}}
+@keyframes kl10{0%{opacity:0}67%{opacity:1}76%{opacity:0}100%{opacity:0}}
+
+/* -- page turn: three sprite frames at the end of the loop -- */
+.pt1,.pt2,.pt3{opacity:0;animation-duration:8s}
+.pt1{animation-name:kpt1}.pt2{animation-name:kpt2}.pt3{animation-name:kpt3}
+@keyframes kpt1{0%{opacity:0}76%{opacity:1}81%{opacity:0}100%{opacity:0}}
+@keyframes kpt2{0%{opacity:0}81%{opacity:1}86%{opacity:0}100%{opacity:0}}
+@keyframes kpt3{0%{opacity:0}86%{opacity:1}91%{opacity:0}100%{opacity:0}}
+
+/* -- sound waves: 2s cycle, staggered so 2 are in flight -- */
+.wv{opacity:0;animation-name:kwv;animation-duration:2s}
+@keyframes kwv{0%{opacity:1}35%{opacity:0}100%{opacity:0}}
+.w0{animation-delay:-2s}.w1{animation-delay:-1.66s}.w2{animation-delay:-1.32s}.w3{animation-delay:-.98s}.w4{animation-delay:-.64s}
+
+/* -- cord pulse: 1.8s cycle, chunk by chunk mic → tower -- */
+.cp{opacity:0;animation-name:kcp;animation-duration:1.8s}
+@keyframes kcp{0%{opacity:1}12%{opacity:0}100%{opacity:0}}
+.c0{animation-delay:-1.8s}.c1{animation-delay:-1.66s}.c2{animation-delay:-1.52s}.c3{animation-delay:-1.38s}.c4{animation-delay:-1.24s}
+.c5{animation-delay:-1.1s}.c6{animation-delay:-.96s}.c7{animation-delay:-.82s}.c8{animation-delay:-.68s}
+
+/* -- progress bar: 4s cycle, 8 segments then clear -- */
+.sg1,.sg2,.sg3,.sg4,.sg5,.sg6,.sg7,.sg8{opacity:0;animation-duration:4s}
+.sg1{animation-name:ks1}.sg2{animation-name:ks2}.sg3{animation-name:ks3}.sg4{animation-name:ks4}
+.sg5{animation-name:ks5}.sg6{animation-name:ks6}.sg7{animation-name:ks7}.sg8{animation-name:ks8}
+@keyframes ks1{0%{opacity:0}8%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks2{0%{opacity:0}17%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks3{0%{opacity:0}26%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks4{0%{opacity:0}35%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks5{0%{opacity:0}44%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks6{0%{opacity:0}53%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks7{0%{opacity:0}62%{opacity:1}92%{opacity:0}100%{opacity:0}}
+@keyframes ks8{0%{opacity:0}71%{opacity:1}92%{opacity:0}100%{opacity:0}}
+
+/* -- small lamps -- */
+.lamp{animation-name:klamp;animation-duration:2s}
+@keyframes klamp{0%{opacity:1}60%{opacity:.25}100%{opacity:1}}
+.led{animation-name:kled;animation-duration:1s}
+@keyframes kled{0%{opacity:1}50%{opacity:.2}100%{opacity:1}}
+</style>
+</head>
+<body>
+<svg class="stage" viewBox="0 0 204 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A book being read aloud into a 1930s microphone, recorded by a computer">
+<defs>
+  <!-- jagged handwriting lines -->
+  <g id="jagA" fill="var(--b-navy)">
+    <rect x="0" y="0" width="3" height="1"/><rect x="3" y="1" width="2" height="1"/>
+    <rect x="5" y="0" width="2" height="1"/><rect x="7" y="1" width="3" height="1"/>
+    <rect x="10" y="0" width="2" height="1"/>
+  </g>
+  <g id="jagB" fill="var(--b-navy)">
+    <rect x="0" y="1" width="2" height="1"/><rect x="2" y="0" width="3" height="1"/>
+    <rect x="5" y="1" width="3" height="1"/>
+  </g>
+</defs>
+
+<!-- ================= 1. OPEN BOOK (angled, M profile) ================= -->
+<g id="book">
+  <!-- black backing, column by column (stepped slope) -->
+  <g fill="var(--b-black)">
+    <rect x="3" y="51" width="7" height="27"/><rect x="8" y="52" width="6" height="27"/>
+    <rect x="12" y="53" width="6" height="27"/><rect x="16" y="54" width="6" height="27"/>
+    <rect x="20" y="55" width="7" height="27"/>
+    <rect x="27" y="55" width="7" height="27"/><rect x="32" y="54" width="6" height="27"/>
+    <rect x="36" y="53" width="6" height="27"/><rect x="40" y="52" width="6" height="27"/>
+    <rect x="44" y="51" width="6" height="27"/>
+  </g>
+  <!-- maroon cover thickness under the pages -->
+  <g fill="var(--b-maroon)">
+    <rect x="4" y="74" width="5" height="3"/><rect x="9" y="75" width="4" height="3"/>
+    <rect x="13" y="76" width="4" height="3"/><rect x="17" y="77" width="4" height="3"/>
+    <rect x="21" y="78" width="5" height="3"/>
+    <rect x="28" y="78" width="5" height="3"/><rect x="33" y="77" width="4" height="3"/>
+    <rect x="37" y="76" width="4" height="3"/><rect x="41" y="75" width="4" height="3"/>
+    <rect x="45" y="74" width="4" height="3"/>
+  </g>
+  <!-- white pages, sloping down to the spine -->
+  <g fill="var(--b-white)">
+    <rect x="4" y="52" width="5" height="22"/><rect x="9" y="53" width="4" height="22"/>
+    <rect x="13" y="54" width="4" height="22"/><rect x="17" y="55" width="4" height="22"/>
+    <rect x="21" y="56" width="5" height="22"/>
+    <rect x="28" y="56" width="5" height="22"/><rect x="33" y="55" width="4" height="22"/>
+    <rect x="37" y="54" width="4" height="22"/><rect x="41" y="53" width="4" height="22"/>
+    <rect x="45" y="52" width="4" height="22"/>
+  </g>
+  <!-- page shading at spine -->
+  <rect x="25" y="56" width="1" height="22" fill="var(--b-silver)"/>
+  <rect x="28" y="56" width="1" height="22" fill="var(--b-silver)"/>
+  <!-- handwriting, left page then right -->
+  <use href="#jagA" x="6"  y="58" class="l1"/>
+  <use href="#jagA" x="6"  y="62" class="l2"/>
+  <use href="#jagA" x="6"  y="66" class="l3"/>
+  <use href="#jagA" x="6"  y="70" class="l4"/>
+  <use href="#jagB" x="6"  y="73" class="l5"/>
+  <use href="#jagA" x="30" y="59" class="l6"/>
+  <use href="#jagA" x="30" y="63" class="l7"/>
+  <use href="#jagA" x="30" y="67" class="l8"/>
+  <use href="#jagA" x="30" y="71" class="l9"/>
+  <use href="#jagB" x="30" y="74" class="l10"/>
+  <!-- page-turn sprite frames -->
+  <g class="pt1"><path d="M27 56 L46 37 L46 59 L27 78 Z" fill="var(--b-white)" stroke="var(--b-black)" stroke-width="1"/></g>
+  <g class="pt2"><rect x="25" y="32" width="4" height="26" fill="var(--b-white)" stroke="var(--b-black)" stroke-width="1"/></g>
+  <g class="pt3"><path d="M27 56 L8 37 L8 59 L27 78 Z" fill="var(--b-white)" stroke="var(--b-black)" stroke-width="1"/></g>
+</g>
+
+<!-- ================= 2. SOUND WAVES ================= -->
+<g id="waves" fill="var(--b-navy)">
+  <g class="wv w0"><rect x="54" y="58" width="2" height="2"/></g>
+  <g class="wv w1" transform="translate(60,52)">
+    <rect x="0" y="0" width="1" height="2"/><rect x="1" y="2" width="1" height="2"/><rect x="0" y="4" width="1" height="2"/>
+  </g>
+  <g class="wv w2" transform="translate(66,44)">
+    <rect x="0" y="0" width="1" height="3"/><rect x="1" y="3" width="1" height="4"/><rect x="0" y="7" width="1" height="3"/>
+  </g>
+  <g class="wv w3" transform="translate(72,38)">
+    <rect x="0" y="0" width="1" height="4"/><rect x="1" y="3" width="1" height="3"/><rect x="2" y="5" width="1" height="4"/>
+    <rect x="1" y="8" width="1" height="3"/><rect x="0" y="10" width="1" height="4"/>
+  </g>
+  <g class="wv w4" transform="translate(79,34)">
+    <rect x="0" y="0" width="1" height="4"/><rect x="1" y="3" width="1" height="4"/><rect x="2" y="6" width="1" height="4"/>
+    <rect x="1" y="9" width="1" height="4"/><rect x="0" y="12" width="1" height="4"/>
+  </g>
+</g>
+
+<!-- ================= 3. MICROPHONE ================= -->
+<g id="mic">
+  <!-- round base, three slabs -->
+  <rect x="90" y="74" width="16" height="4" fill="var(--b-black)"/>
+  <rect x="91" y="75" width="14" height="2" fill="var(--b-silver)"/>
+  <rect x="86" y="77" width="24" height="4" fill="var(--b-black)"/>
+  <rect x="87" y="78" width="22" height="2" fill="var(--b-silver)"/>
+  <rect x="84" y="80" width="28" height="4" fill="var(--b-black)"/>
+  <rect x="85" y="81" width="26" height="2" fill="var(--b-gray)"/>
+  <!-- stem -->
+  <rect x="95" y="57" width="6" height="18" fill="var(--b-black)"/>
+  <rect x="96" y="58" width="4" height="16" fill="var(--b-silver)"/>
+  <rect x="96" y="58" width="1" height="16" fill="var(--b-white)"/>
+  <!-- ON lamp -->
+  <rect x="97" y="27" width="2" height="2" fill="var(--b-red)" class="lamp"/>
+  <!-- chrome capsule -->
+  <rect x="92" y="29" width="12" height="2" fill="var(--b-black)"/>
+  <rect x="90" y="31" width="16" height="24" fill="var(--b-black)"/>
+  <rect x="92" y="55" width="12" height="2" fill="var(--b-black)"/>
+  <rect x="93" y="30" width="10" height="1" fill="var(--b-silver)"/>
+  <rect x="91" y="32" width="14" height="22" fill="var(--b-silver)"/>
+  <rect x="93" y="54" width="10" height="1" fill="var(--b-silver)"/>
+  <rect x="93" y="32" width="2" height="22" fill="var(--b-white)"/>
+  <rect x="102" y="32" width="2" height="22" fill="var(--b-gray)"/>
+  <!-- grille -->
+  <rect x="92" y="36" width="12" height="1" fill="var(--b-black)"/>
+  <rect x="92" y="40" width="12" height="1" fill="var(--b-black)"/>
+  <rect x="92" y="44" width="12" height="1" fill="var(--b-black)"/>
+  <rect x="92" y="48" width="12" height="1" fill="var(--b-black)"/>
+  <!-- grille dither -->
+  <rect x="94" y="38" width="1" height="1" fill="var(--b-gray)"/><rect x="97" y="38" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="100" y="38" width="1" height="1" fill="var(--b-gray)"/><rect x="95" y="42" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="98" y="42" width="1" height="1" fill="var(--b-gray)"/><rect x="101" y="42" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="94" y="46" width="1" height="1" fill="var(--b-gray)"/><rect x="97" y="46" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="100" y="46" width="1" height="1" fill="var(--b-gray)"/>
+</g>
+
+<!-- ================= 4. CORD + PULSE ================= -->
+<g id="cord" fill="var(--b-black)">
+  <rect x="112" y="82" width="3" height="1"/>
+  <rect x="115" y="84" width="3" height="1"/>
+  <rect x="118" y="86" width="3" height="1"/>
+  <rect x="121" y="87" width="4" height="1"/>
+  <rect x="125" y="87" width="4" height="1"/>
+  <rect x="129" y="87" width="3" height="1"/>
+  <rect x="132" y="86" width="2" height="1"/>
+  <rect x="134" y="84" width="1" height="2"/>
+  <rect x="135" y="81" width="1" height="3"/>
+  <!-- connecting elbows -->
+  <rect x="114" y="83" width="1" height="1"/><rect x="117" y="85" width="1" height="1"/>
+</g>
+<g id="pulse" fill="var(--b-cyan)">
+  <rect class="cp c0" x="112" y="82" width="3" height="1"/>
+  <rect class="cp c1" x="115" y="84" width="3" height="1"/>
+  <rect class="cp c2" x="118" y="86" width="3" height="1"/>
+  <rect class="cp c3" x="121" y="87" width="4" height="1"/>
+  <rect class="cp c4" x="125" y="87" width="4" height="1"/>
+  <rect class="cp c5" x="129" y="87" width="3" height="1"/>
+  <rect class="cp c6" x="132" y="86" width="2" height="1"/>
+  <rect class="cp c7" x="134" y="84" width="1" height="2"/>
+  <rect class="cp c8" x="135" y="81" width="1" height="3"/>
+</g>
+
+<!-- ================= 5. COMPUTER ================= -->
+<g id="computer">
+  <!-- tower (desktop case) -->
+  <rect x="136" y="64" width="60" height="20" fill="var(--b-black)"/>
+  <rect x="137" y="65" width="58" height="18" fill="var(--b-silver)"/>
+  <rect x="137" y="65" width="58" height="1" fill="var(--b-white)"/>
+  <rect x="137" y="81" width="58" height="2" fill="var(--b-gray)"/>
+  <rect x="178" y="70" width="12" height="1" fill="var(--b-black)"/>
+  <rect x="178" y="74" width="12" height="2" fill="var(--b-gray)"/>
+  <rect x="172" y="71" width="2" height="2" fill="var(--b-green)" class="led"/>
+  <!-- monitor -->
+  <rect x="142" y="26" width="48" height="38" fill="var(--b-black)"/>
+  <rect x="143" y="27" width="46" height="36" fill="var(--b-silver)"/>
+  <rect x="143" y="27" width="46" height="1" fill="var(--b-white)"/>
+  <rect x="143" y="27" width="1" height="36" fill="var(--b-white)"/>
+  <rect x="188" y="28" width="1" height="35" fill="var(--b-gray)"/>
+  <rect x="144" y="62" width="45" height="1" fill="var(--b-gray)"/>
+  <!-- screen, sunken -->
+  <rect x="148" y="32" width="36" height="24" fill="var(--b-black)"/>
+  <rect x="149" y="33" width="34" height="22" fill="var(--b-white)"/>
+  <rect x="149" y="33" width="34" height="1" fill="var(--b-gray)"/>
+  <rect x="149" y="33" width="1" height="22" fill="var(--b-gray)"/>
+  <!-- progress bar -->
+  <rect x="153" y="42" width="26" height="8" fill="var(--b-black)"/>
+  <rect x="154" y="43" width="24" height="6" fill="var(--b-white)"/>
+  <rect class="sg1" x="155" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg2" x="158" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg3" x="161" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg4" x="164" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg5" x="167" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg6" x="170" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg7" x="173" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <rect class="sg8" x="176" y="44" width="2" height="4" fill="var(--b-navy)"/>
+  <!-- monitor power LED -->
+  <rect x="183" y="59" width="2" height="2" fill="var(--b-green)"/>
+</g>
+</svg>
+</body>
+</html>

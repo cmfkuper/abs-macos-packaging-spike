@@ -45,6 +45,12 @@ class JsApi:
     def set_audio_quality(self, tier):
         return self._backend.set_audio_quality(tier)
 
+    def minimize(self):
+        return self._backend.minimize()
+
+    def close_window(self):
+        return self._backend.close_window()
+
 
 class Backend:
     def __init__(self, settings: Settings | None = None):
@@ -143,6 +149,27 @@ class Backend:
         return True
 
     # ---------- window lifecycle ----------
+
+    def minimize(self):
+        if self.window is not None:
+            self.window.minimize()
+        return True
+
+    def close_window(self):
+        """The frameless window's in-page ✕. Same double-press guard as the
+        native close: first press warns while a rip is running."""
+        if self.worker and self.worker.is_alive():
+            now = time.monotonic()
+            if now >= self._close_armed_until:
+                self._close_armed_until = now + 10
+                self._emit("log", text="⚠ A rip is in progress — press ✕ again "
+                                       "within 10 seconds to abort and quit.")
+                return False
+            self.cancel_flag.set()
+            self.disc_answer.put("cancel")
+        if self.window is not None:
+            self.window.destroy()
+        return True
 
     def on_closing(self):
         """Veto the first close while ripping; a second click within 10s quits."""
@@ -250,10 +277,11 @@ class Backend:
                 if answer == "assemble":
                     break
 
-            self._emit("assembling")
             tier = QUALITY_TIERS[self.settings.audio_quality]
             encoder = engine.Encoder(
                 job, bitrate=tier["bitrate"], channels=tier["channels"])
+            self._emit("assembling", path=str(encoder.output_path),
+                       discs=len(job.discs))
             self._emit("stage", text="Assembling discs and converting to M4B…")
             self._emit("progress", done=0, total=1)
             out = encoder.encode(
@@ -288,9 +316,12 @@ def main():
     from .uiassets import load_html
 
     backend = Backend()
+    # Frameless: the CRT bezel is the window; the fake Win95 title bar drags
+    # (class pywebview-drag-region) and its ✕/minimize go through the bridge.
     window = webview.create_window(
         "Audiobook Bob", html=load_html(), js_api=JsApi(backend),
-        width=680, height=640, min_size=(560, 480))
+        width=1154, height=880, frameless=True, easy_drag=False,
+        resizable=False)
     backend.window = window
     window.events.closing += backend.on_closing
     threading.Thread(target=backend.dispatch_forever, daemon=True).start()

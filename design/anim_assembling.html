@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Assembling — Pixel Progress</title>
+<!--
+  API (ship version):
+  1. DRIVE PROGRESS — set the custom property on #scene (0..1):
+       document.getElementById('scene').style.setProperty('--progress', 0.42);
+  2. SWAP COVER ART — replace the href of the single <image id="cover-art">:
+       document.getElementById('cover-art').setAttribute('href', coverUrl);
+     Any raster works; it is clipped to the disc, masked by progress, and
+     rendered pixelated at 60x60 scene units so it matches the art style.
+  Engine note: uses CSS round()/mod() — needs a 2024+ engine (fine in any
+  current Chromium/WebKit/Gecko webview). Without them the scene degrades
+  to a static full block + hidden cover, no errors.
+-->
+<style>
+:root{
+  /* Set B period palette — matches Field Icons */
+  --b-black:#000000;
+  --b-white:#ffffff;
+  --b-silver:#c0c0c0;
+  --b-gray:#808080;
+  --b-navy:#000080;
+  --b-red:#ff0000;
+  --b-maroon:#800000;
+  --b-olive:#808000;
+  --b-yellow:#ffff00;
+  --b-cyan:#00ffff;
+  --b-green:#008000;
+}
+html,body{margin:0;padding:0;background:transparent}
+.stage{display:block;width:100%;min-width:400px;max-width:900px;margin:0 auto;image-rendering:pixelated}
+svg{shape-rendering:crispEdges}
+
+/* ---- progress plumbing: everything below is a pure function of --progress ---- */
+#scene{
+  --p: clamp(0, var(--progress, 0), 1);
+  --row: round(down, var(--p) * 64, 1);      /* drain steps, whole px   */
+  --drain: calc(var(--row) * 1px);
+  --flip: mod(var(--row), 2);                /* digit flicker per step  */
+  --rev: calc(round(down, var(--p) * 60, 1) * 1px); /* cover reveal, whole px */
+}
+#drainRect{ y: calc(16px + var(--drain)); height: calc(64px - var(--drain)); }
+.dA{ opacity: calc(1 - var(--flip)); }
+.dB{ opacity: var(--flip); }
+#edgeWrap{ opacity: calc(min(64 - var(--row), 1)); }
+.edge{ y: calc(16px + var(--drain)); }
+#mReveal{ y: calc(82px - var(--rev)); height: var(--rev); }
+#cover-art{ image-rendering: pixelated; }
+
+/* ---- the one decorative loop: stream particles, frame-by-frame ---- */
+.p{animation:pflow 1.8s steps(1,end) infinite}
+.p1{animation-delay:0s}.p2{animation-delay:-.36s}.p3{animation-delay:-.72s}.p4{animation-delay:-1.08s}.p5{animation-delay:-1.44s}
+@keyframes pflow{
+  0%{transform:translate(0,0)}
+  7.69%{transform:translate(7px,1px)}
+  15.38%{transform:translate(14px,2px)}
+  23.08%{transform:translate(21px,3px)}
+  30.77%{transform:translate(28px,3px)}
+  38.46%{transform:translate(35px,3px)}
+  46.15%{transform:translate(42px,2px)}
+  53.85%{transform:translate(49px,1px)}
+  61.54%{transform:translate(56px,-1px)}
+  69.23%{transform:translate(63px,-3px)}
+  76.92%{transform:translate(70px,-5px)}
+  84.62%{transform:translate(77px,-6px)}
+  92.31%{transform:translate(84px,-7px)}
+  100%{transform:translate(91px,-7px)}
+}
+</style>
+</head>
+<body>
+<svg id="scene" class="stage" viewBox="0 0 204 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Binary data draining from a column, streaming into a CD whose cover art assembles bottom-up">
+<defs>
+  <!-- 3x5 pixel digits -->
+  <g id="g1"><rect x="1" y="0" width="1" height="4"/><rect x="0" y="1" width="1" height="1"/><rect x="0" y="4" width="3" height="1"/></g>
+  <g id="g0"><rect x="0" y="1" width="1" height="3"/><rect x="2" y="1" width="1" height="3"/><rect x="1" y="0" width="1" height="1"/><rect x="1" y="4" width="1" height="1"/></g>
+  <!-- drain clip: y/height driven by --progress -->
+  <clipPath id="drainClip"><rect id="drainRect" x="6" y="16" width="28" height="64"/></clipPath>
+  <!-- disc face (r30 at 152,52; center hole punched) doubles as the cover clip -->
+  <path id="discFace" d="M147 22h10v1h-10zM143 23h18v1h-18zM141 24h22v1h-22zM138 25h28v1h-28zM137 26h30v1h-30zM135 27h34v1h-34zM134 28h36v1h-36zM133 29h38v1h-38zM132 30h40v1h-40zM131 31h42v1h-42zM130 32h44v1h-44zM129 33h46v1h-46zM128 34h48v1h-48zM127 35h50v1h-50zM127 36h50v1h-50zM126 37h52v1h-52zM126 38h52v1h-52zM125 39h54v1h-54zM125 40h54v1h-54zM124 41h56v1h-56zM124 42h56v1h-56zM124 43h56v1h-56zM123 44h58v1h-58zM123 45h58v1h-58zM123 46h58v1h-58zM123 47h58v1h-58zM123 48h28v1h-28zM153 48h28v1h-28zM123 49h26v1h-26zM155 49h26v1h-26zM123 50h26v1h-26zM155 50h26v1h-26zM123 51h26v1h-26zM155 51h26v1h-26zM123 52h26v1h-26zM155 52h26v1h-26zM123 53h26v1h-26zM155 53h26v1h-26zM123 54h26v1h-26zM155 54h26v1h-26zM123 55h28v1h-28zM153 55h28v1h-28zM123 56h58v1h-58zM123 57h58v1h-58zM123 58h58v1h-58zM123 59h58v1h-58zM124 60h56v1h-56zM124 61h56v1h-56zM124 62h56v1h-56zM125 63h54v1h-54zM125 64h54v1h-54zM126 65h52v1h-52zM126 66h52v1h-52zM127 67h50v1h-50zM127 68h50v1h-50zM128 69h48v1h-48zM129 70h46v1h-46zM130 71h44v1h-44zM131 72h42v1h-42zM132 73h40v1h-40zM133 74h38v1h-38zM134 75h36v1h-36zM135 76h34v1h-34zM137 77h30v1h-30zM138 78h28v1h-28zM141 79h22v1h-22zM143 80h18v1h-18zM147 81h10v1h-10z"/>
+  <clipPath id="discClip"><use href="#discFace"/></clipPath>
+  <!-- reveal mask: white rect rises bottom-up with --progress -->
+  <mask id="coverMask" maskUnits="userSpaceOnUse" x="118" y="20" width="68" height="64">
+    <rect id="mReveal" x="120" y="82" width="64" height="0" fill="#fff"/>
+  </mask>
+</defs>
+
+<!-- ================= 1. BINARY BLOCK (drains top-down) ================= -->
+<g clip-path="url(#drainClip)">
+  <!-- layer A: shown on even drain steps -->
+  <g class="dA" fill="var(--b-navy)">
+    <use href="#g1" x="8" y="18"/><use href="#g0" x="12" y="18"/><use href="#g1" x="16" y="18"/><use href="#g1" x="20" y="18"/><use href="#g0" x="24" y="18"/><use href="#g1" x="28" y="18"/>
+    <use href="#g0" x="8" y="24"/><use href="#g1" x="12" y="24"/><use href="#g0" x="16" y="24"/><use href="#g0" x="20" y="24"/><use href="#g1" x="24" y="24"/><use href="#g0" x="28" y="24"/>
+    <use href="#g1" x="8" y="30"/><use href="#g1" x="12" y="30"/><use href="#g0" x="16" y="30"/><use href="#g1" x="20" y="30"/><use href="#g0" x="24" y="30"/><use href="#g0" x="28" y="30"/>
+    <use href="#g0" x="8" y="36"/><use href="#g0" x="12" y="36"/><use href="#g1" x="16" y="36"/><use href="#g0" x="20" y="36"/><use href="#g1" x="24" y="36"/><use href="#g1" x="28" y="36"/>
+    <use href="#g1" x="8" y="42"/><use href="#g0" x="12" y="42"/><use href="#g0" x="16" y="42"/><use href="#g1" x="20" y="42"/><use href="#g1" x="24" y="42"/><use href="#g0" x="28" y="42"/>
+    <use href="#g0" x="8" y="48"/><use href="#g1" x="12" y="48"/><use href="#g1" x="16" y="48"/><use href="#g0" x="20" y="48"/><use href="#g0" x="24" y="48"/><use href="#g1" x="28" y="48"/>
+    <use href="#g1" x="8" y="54"/><use href="#g0" x="12" y="54"/><use href="#g1" x="16" y="54"/><use href="#g0" x="20" y="54"/><use href="#g1" x="24" y="54"/><use href="#g0" x="28" y="54"/>
+    <use href="#g0" x="8" y="60"/><use href="#g1" x="12" y="60"/><use href="#g0" x="16" y="60"/><use href="#g1" x="20" y="60"/><use href="#g0" x="24" y="60"/><use href="#g1" x="28" y="60"/>
+    <use href="#g1" x="8" y="66"/><use href="#g1" x="12" y="66"/><use href="#g0" x="16" y="66"/><use href="#g0" x="20" y="66"/><use href="#g1" x="24" y="66"/><use href="#g1" x="28" y="66"/>
+    <use href="#g0" x="8" y="72"/><use href="#g0" x="12" y="72"/><use href="#g1" x="16" y="72"/><use href="#g1" x="20" y="72"/><use href="#g0" x="24" y="72"/><use href="#g0" x="28" y="72"/>
+  </g>
+  <!-- layer B: inverted digits, shown on odd steps; a few hot cyan cells -->
+  <g class="dB" fill="var(--b-navy)">
+    <use href="#g0" x="8" y="18"/><use href="#g1" x="12" y="18"/><use href="#g0" x="16" y="18"/><use href="#g0" x="20" y="18"/><use href="#g1" x="24" y="18"/><use href="#g0" x="28" y="18"/>
+    <use href="#g1" x="8" y="24"/><use href="#g0" x="12" y="24"/><use href="#g1" x="16" y="24" fill="var(--b-cyan)"/><use href="#g1" x="20" y="24"/><use href="#g0" x="24" y="24"/><use href="#g1" x="28" y="24"/>
+    <use href="#g0" x="8" y="30"/><use href="#g0" x="12" y="30"/><use href="#g1" x="16" y="30"/><use href="#g0" x="20" y="30"/><use href="#g1" x="24" y="30"/><use href="#g1" x="28" y="30" fill="var(--b-cyan)"/>
+    <use href="#g1" x="8" y="36"/><use href="#g1" x="12" y="36"/><use href="#g0" x="16" y="36"/><use href="#g1" x="20" y="36"/><use href="#g0" x="24" y="36"/><use href="#g0" x="28" y="36"/>
+    <use href="#g0" x="8" y="42"/><use href="#g1" x="12" y="42"/><use href="#g1" x="16" y="42"/><use href="#g0" x="20" y="42"/><use href="#g0" x="24" y="42" fill="var(--b-cyan)"/><use href="#g1" x="28" y="42"/>
+    <use href="#g1" x="8" y="48"/><use href="#g0" x="12" y="48"/><use href="#g0" x="16" y="48"/><use href="#g1" x="20" y="48"/><use href="#g1" x="24" y="48"/><use href="#g0" x="28" y="48"/>
+    <use href="#g0" x="8" y="54" fill="var(--b-cyan)"/><use href="#g1" x="12" y="54"/><use href="#g0" x="16" y="54"/><use href="#g1" x="20" y="54"/><use href="#g0" x="24" y="54"/><use href="#g1" x="28" y="54"/>
+    <use href="#g1" x="8" y="60"/><use href="#g0" x="12" y="60"/><use href="#g1" x="16" y="60"/><use href="#g0" x="20" y="60"/><use href="#g1" x="24" y="60"/><use href="#g0" x="28" y="60"/>
+    <use href="#g0" x="8" y="66"/><use href="#g0" x="12" y="66"/><use href="#g1" x="16" y="66"/><use href="#g1" x="20" y="66" fill="var(--b-cyan)"/><use href="#g0" x="24" y="66"/><use href="#g0" x="28" y="66"/>
+    <use href="#g1" x="8" y="72"/><use href="#g1" x="12" y="72"/><use href="#g0" x="16" y="72"/><use href="#g0" x="20" y="72"/><use href="#g1" x="24" y="72"/><use href="#g1" x="28" y="72"/>
+  </g>
+</g>
+<!-- drain surface line, rides the top edge -->
+<g id="edgeWrap">
+  <rect class="edge dA" x="8" y="16" width="24" height="1" fill="var(--b-cyan)"/>
+  <rect class="edge dB" x="8" y="16" width="24" height="1" fill="var(--b-white)"/>
+</g>
+
+<!-- ================= 2. STREAM (the one free-running loop) ================= -->
+<g fill="var(--b-cyan)">
+  <g class="p p1"><use href="#g1" x="33" y="72"/></g>
+  <g class="p p2"><use href="#g0" x="33" y="72"/></g>
+  <g class="p p3"><use href="#g1" x="33" y="72" fill="var(--b-navy)"/></g>
+  <g class="p p4"><use href="#g0" x="33" y="72"/></g>
+  <g class="p p5"><use href="#g0" x="33" y="72" fill="var(--b-navy)"/></g>
+</g>
+
+<!-- ================= 3. CD-ROM ================= -->
+<!-- blank face -->
+<use href="#discFace" fill="var(--b-silver)"/>
+<!-- face texture: dither + iridescent glints (hidden as cover rises) -->
+<g clip-path="url(#discClip)">
+  <rect x="134" y="33" width="1" height="1" fill="var(--b-gray)"/><rect x="145" y="29" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="160" y="31" width="1" height="1" fill="var(--b-gray)"/><rect x="170" y="38" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="128" y="44" width="1" height="1" fill="var(--b-gray)"/><rect x="139" y="39" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="167" y="47" width="1" height="1" fill="var(--b-gray)"/><rect x="175" y="55" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="130" y="58" width="1" height="1" fill="var(--b-gray)"/><rect x="141" y="63" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="152" y="67" width="1" height="1" fill="var(--b-gray)"/><rect x="136" y="70" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="163" y="72" width="1" height="1" fill="var(--b-gray)"/><rect x="149" y="76" width="1" height="1" fill="var(--b-gray)"/>
+  <rect x="166" y="64" width="6" height="1" fill="var(--b-cyan)"/>
+  <rect x="162" y="67" width="7" height="1" fill="var(--b-navy)"/>
+  <rect x="157" y="70" width="6" height="1" fill="var(--b-cyan)"/>
+</g>
+<!-- THE COVER: swap this element's href at runtime (see header comment).
+     Demo placeholder below is an inline pixel-art data URI. -->
+<image id="cover-art" x="122" y="22" width="60" height="60"
+  preserveAspectRatio="xMidYMid slice"
+  clip-path="url(#discClip)" mask="url(#coverMask)"
+  href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15' shape-rendering='crispEdges'%3E%3Crect width='15' height='15' fill='%23000080'/%3E%3Crect x='10' y='2' width='3' height='3' fill='%23ffff00'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='7' y='1' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='13' y='5' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='2' y='7' width='2' height='1' fill='%23800000'/%3E%3Crect x='1' y='8' width='4' height='1' fill='%23800000'/%3E%3Crect x='9' y='6' width='1' height='1' fill='%23800000'/%3E%3Crect x='8' y='7' width='3' height='1' fill='%23800000'/%3E%3Crect x='7' y='8' width='5' height='1' fill='%23800000'/%3E%3Crect y='9' width='15' height='3' fill='%23800000'/%3E%3Crect y='12' width='15' height='3' fill='%23808000'/%3E%3C/svg%3E"/>
+<!-- hub: black ring (r9), silver clamp donut (r8), true hole transparent (r4) -->
+<g fill="var(--b-black)">
+  <rect x="150" y="43" width="4" height="1"/><rect x="148" y="44" width="8" height="1"/><rect x="146" y="45" width="12" height="1"/>
+  <rect x="145" y="46" width="14" height="1"/><rect x="145" y="47" width="14" height="1"/>
+  <rect x="144" y="48" width="7" height="1"/><rect x="153" y="48" width="7" height="1"/>
+  <rect x="144" y="49" width="5" height="1"/><rect x="155" y="49" width="5" height="1"/>
+  <rect x="144" y="50" width="5" height="1"/><rect x="155" y="50" width="5" height="1"/>
+  <rect x="144" y="51" width="5" height="1"/><rect x="155" y="51" width="5" height="1"/>
+  <rect x="144" y="52" width="5" height="1"/><rect x="155" y="52" width="5" height="1"/>
+  <rect x="144" y="53" width="5" height="1"/><rect x="155" y="53" width="5" height="1"/>
+  <rect x="144" y="54" width="5" height="1"/><rect x="155" y="54" width="5" height="1"/>
+  <rect x="144" y="55" width="7" height="1"/><rect x="153" y="55" width="7" height="1"/>
+  <rect x="145" y="56" width="14" height="1"/><rect x="145" y="57" width="14" height="1"/>
+  <rect x="146" y="58" width="12" height="1"/><rect x="148" y="59" width="8" height="1"/><rect x="150" y="60" width="4" height="1"/>
+</g>
+<g fill="var(--b-silver)">
+  <rect x="150" y="44" width="4" height="1"/><rect x="148" y="45" width="8" height="1"/><rect x="147" y="46" width="10" height="1"/>
+  <rect x="146" y="47" width="12" height="1"/>
+  <rect x="145" y="48" width="6" height="1"/><rect x="153" y="48" width="6" height="1"/>
+  <rect x="145" y="49" width="4" height="1"/><rect x="155" y="49" width="4" height="1"/>
+  <rect x="145" y="50" width="4" height="1"/><rect x="155" y="50" width="4" height="1"/>
+  <rect x="145" y="51" width="4" height="1"/><rect x="155" y="51" width="4" height="1"/>
+  <rect x="145" y="52" width="4" height="1"/><rect x="155" y="52" width="4" height="1"/>
+  <rect x="145" y="53" width="4" height="1"/><rect x="155" y="53" width="4" height="1"/>
+  <rect x="145" y="54" width="4" height="1"/><rect x="155" y="54" width="4" height="1"/>
+  <rect x="145" y="55" width="6" height="1"/><rect x="153" y="55" width="6" height="1"/>
+</g>
+<g fill="var(--b-gray)">
+  <rect x="146" y="56" width="12" height="1"/><rect x="147" y="57" width="10" height="1"/>
+  <rect x="148" y="58" width="8" height="1"/><rect x="150" y="59" width="4" height="1"/>
+</g>
+<!-- permanent plastic sheen, sits above the cover -->
+<g fill="var(--b-white)">
+  <rect x="136" y="28" width="5" height="1"/><rect x="132" y="31" width="4" height="1"/>
+  <rect x="129" y="35" width="3" height="1"/><rect x="127" y="40" width="2" height="1"/><rect x="126" y="45" width="1" height="1"/>
+</g>
+</svg>
+
+<!-- ════════ DEMO SCAFFOLDING — DELETE FROM HERE TO SHIP ════════ -->
+<div id="demo" style="max-width:900px;margin:24px auto 0;display:flex;gap:12px;align-items:center;font:13px 'Palatino Linotype',Palatino,Georgia,serif;color:#6f6a63">
+  <label for="pr">--progress</label>
+  <input id="pr" type="range" min="0" max="1000" value="0" style="flex:1">
+  <span id="pct" style="min-width:4ch;font-variant-numeric:tabular-nums">0%</span>
+  <button id="auto" style="font:inherit;padding:2px 10px">run 0&#8594;1</button>
+</div>
+<script>
+/* demo only — the scene itself needs no JS */
+const scene=document.getElementById('scene'),pr=document.getElementById('pr'),
+      pct=document.getElementById('pct'),auto=document.getElementById('auto');
+const set=v=>{scene.style.setProperty('--progress',v);pct.textContent=Math.round(v*100)+'%'};
+pr.oninput=()=>set(pr.value/1000);
+let t=null;
+auto.onclick=()=>{
+  if(t){clearInterval(t);t=null;auto.textContent='run 0\u21921';return}
+  let v=0;auto.textContent='stop';
+  t=setInterval(()=>{v=Math.min(1,v+.005);set(v);pr.value=v*1000;
+    if(v>=1){clearInterval(t);t=null;auto.textContent='run 0\u21921'}},30);
+};
+</script>
+<!-- ════════ DELETE TO HERE ════════ -->
+</body>
+</html>
