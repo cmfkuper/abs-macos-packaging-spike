@@ -482,8 +482,17 @@ def _bridgetest() -> int:
                 pass
             time.sleep(0.5)
         try:
-            drives = w.evaluate_js(
-                "window.pywebview.api.get_init().then(i => i.drives)")
+            # cocoa's evaluate_js does not await Promises (EdgeChromium does),
+            # so stash the async result on window and poll for it.
+            w.evaluate_js("window.pywebview.api.get_init()"
+                          ".then(i => { window.__bridge_drives = i.drives; })")
+            drives = None
+            poll_deadline = time.monotonic() + 15
+            while time.monotonic() < poll_deadline:
+                drives = w.evaluate_js("window.__bridge_drives")
+                if isinstance(drives, list):
+                    break
+                time.sleep(0.5)
             title = w.evaluate_js("document.getElementById('tbar-title').textContent")
             result["ok"] = isinstance(drives, list) and "Audiobook Bob" in (title or "")
             print(f"bridge drives: {drives!r}  title: {title!r}")
