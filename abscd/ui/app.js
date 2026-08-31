@@ -20,6 +20,10 @@ const state = {
   discs: {},              // number -> {state, tracks}
   elapsedTimer: null,
   elapsedStart: 0,
+  results: [],            // metadata lookup results
+  carPos: 0,              // carousel position
+  carSelected: null,      // selected result index (null = none)
+  coverData: null,        // data URI of the chosen cover, for the asm scene
 };
 
 /* ---------------- custom pixel dropdowns ---------------- */
@@ -187,6 +191,10 @@ window.onEvent = function (ev) {
       $("asm-title").textContent = $("rip-title").textContent;
       $("asm-disccount").textContent = ev.discs || done;
       $("asm-path").textContent = ev.path || "";
+      if (ev.has_cover && state.coverData) {
+        document.getElementById("cover-art")
+          .setAttribute("href", state.coverData);
+      }
       setBar("asm-fill", "asm-label", 0, 1);
       setAsmProgress(0);
       setMid('<span class="ok">All discs ripped</span>');
@@ -222,6 +230,109 @@ window.onEvent = function (ev) {
       break;
   }
 };
+
+/* ---------------- metadata lookup carousel ---------------- */
+
+function lookupStatus(text) {
+  show("cover-placeholder", false);
+  show("carousel", false);
+  $("lookup-status").innerHTML = text;
+  show("lookup-status", true);
+}
+
+function renderCarousel() {
+  const r = state.results[state.carPos];
+  if (!r) return;
+  show("cover-placeholder", false);
+  show("lookup-status", false);
+  show("carousel", true);
+
+  if (r.thumb) {
+    $("car-img").src = r.thumb;
+    show("car-img", true);
+    show("car-noimg", false);
+  } else {
+    show("car-img", false);
+    show("car-noimg", true);
+  }
+  $("car-title").textContent = r.title;
+  $("car-author").textContent = r.author;
+  $("car-year").textContent =
+    [r.year, r.edition].filter(Boolean).join(" — ") || " ";
+
+  const selectedHere = state.carSelected === state.carPos;
+  $("car-coverbox").classList.toggle("selected", selectedHere);
+  $("car-use").textContent = selectedHere ? "✓ Selected" : "Use this one";
+  $("car-use").disabled = selectedHere;
+  $("car-none").disabled = state.carSelected === null;
+
+  const dots = $("car-dots");
+  dots.innerHTML = "";
+  state.results.forEach((_, i) => {
+    const d = document.createElement("span");
+    d.className = "dot" + (i === state.carPos ? " on" : "")
+      + (i === state.carSelected ? " sel" : "");
+    d.addEventListener("click", () => { state.carPos = i; renderCarousel(); });
+    dots.appendChild(d);
+  });
+}
+
+function carStep(delta) {
+  const n = state.results.length;
+  if (!n) return;
+  state.carPos = (state.carPos + delta + n) % n;
+  renderCarousel();
+}
+
+function findBooks() {
+  $("find-btn").disabled = true;
+  lookupStatus("Searching…");
+  window.pywebview.api.search_books($("title").value, $("author").value)
+    .then((res) => {
+      $("find-btn").disabled = !$("title").value.trim();
+      if (!res.ok) { lookupStatus(res.error); return; }
+      if (!res.results.length) {
+        lookupStatus("No matches found — your typed details will be used.");
+        return;
+      }
+      state.results = res.results;
+      state.carPos = 0;
+      state.carSelected = null;
+      state.coverData = null;
+      renderCarousel();
+    });
+}
+
+function useResult() {
+  const idx = state.carPos;
+  window.pywebview.api.select_result(idx).then((res) => {
+    if (!res.ok) { lookupStatus(res.error); return; }
+    $("title").value = res.title || $("title").value;
+    $("author").value = res.author || $("author").value;
+    if (res.year) $("year").value = res.year;
+    state.carSelected = idx;
+    state.coverData = res.cover_data || null;
+    renderCarousel();
+  });
+}
+
+function clearResult() {
+  window.pywebview.api.clear_selection();
+  state.carSelected = null;
+  state.coverData = null;
+  renderCarousel();
+}
+
+function resetLookup() {
+  state.results = [];
+  state.carPos = 0;
+  state.carSelected = null;
+  state.coverData = null;
+  window.pywebview.api.clear_selection();
+  show("carousel", false);
+  show("lookup-status", false);
+  show("cover-placeholder", true);
+}
 
 /* ---------------- user actions ---------------- */
 
@@ -267,6 +378,8 @@ function startRip() {
 
 function backToSetup() {
   ["author", "title", "year"].forEach((id) => { $(id).value = ""; });
+  resetLookup();
+  $("find-btn").disabled = true;
   stopElapsed();
   show("st-elapsed", false);
   setStatus("Ready");
@@ -327,6 +440,15 @@ function init() {
     window.pywebview.api.choose_output_folder().then(applyOutputStatus);
   });
   $("start-btn").addEventListener("click", startRip);
+  $("title").addEventListener("input", () => {
+    $("find-btn").disabled = !$("title").value.trim();
+  });
+  $("find-btn").addEventListener("click", findBooks);
+  $("car-prev").addEventListener("click", () => carStep(-1));
+  $("car-next").addEventListener("click", () => carStep(1));
+  $("car-use").addEventListener("click", useResult);
+  $("car-img").addEventListener("click", useResult);
+  $("car-none").addEventListener("click", clearResult);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && state.screen === "setup" && !$("start-btn").disabled
         && !e.target.closest(".dd")) startRip();

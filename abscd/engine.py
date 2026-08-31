@@ -175,7 +175,7 @@ class Ripper:
             if should_cancel is not None and should_cancel():
                 raise EngineError("Cancelled")
             if status is not None:
-                status(f"Disc {disc_number}: ripping track {index} of {len(tracks)}…")
+                status(f"Disc {disc_number}: ripping track {index} of {len(tracks)}â¦")
             wav = disc_dir / f"Track {index:02d}.wav"
 
             def tick(n, _base=done):
@@ -191,7 +191,7 @@ class Ripper:
                                       progress=tick, should_cancel=should_cancel)
             except cdrom.RawReadUnsupported:
                 if status is not None:
-                    status(f"Disc {disc_number}: drive refused raw reads; using VLC for track {index}…")
+                    status(f"Disc {disc_number}: drive refused raw reads; using VLC for track {index}â¦")
                 completed = self._rip_with_vlc(track, wav)
                 done = sum(t.byte_size for t in tracks[:index])
                 if progress is not None:
@@ -233,10 +233,12 @@ class Ripper:
 class Encoder:
     """Assembles all ripped discs, in order, into a single chaptered M4B."""
 
-    def __init__(self, job: Job, bitrate: str = "96k", channels: int = 2):
+    def __init__(self, job: Job, bitrate: str = "96k", channels: int = 2,
+                 cover: Path | None = None):
         self.job = job
         self.bitrate = bitrate
         self.channels = channels
+        self.cover = cover if (cover and cover.is_file()) else None
         self.ffmpeg = locate_ffmpeg()
         if not self.ffmpeg:
             raise EngineError(
@@ -270,14 +272,25 @@ class Encoder:
         total_seconds = sum(d.seconds for d in job.discs)
         if status is not None:
             hours = total_seconds / 3600
-            status(f"Converting {len(wavs)} tracks ({hours:.1f} h of audio) to M4B…")
+            status(f"Converting {len(wavs)} tracks ({hours:.1f} h of audio) to M4Bâ¦")
 
         cmd = [
             self.ffmpeg, "-hide_banner", "-y",
             "-f", "concat", "-safe", "0", "-i", str(concat),
             "-i", str(metadata),
+        ]
+        if self.cover is not None:
+            cmd += ["-i", str(self.cover)]
+        cmd += [
             "-map", "0:a", "-map_metadata", "1", "-map_chapters", "1",
             "-c:a", "aac", "-b:a", self.bitrate, "-ac", str(self.channels),
+        ]
+        if self.cover is not None:
+            # JPEG passes through untouched; anything else becomes MJPEG.
+            is_jpeg = self.cover.read_bytes()[:2] == bytes([0xFF, 0xD8])
+            cmd += ["-map", "2:v", "-disposition:v:0", "attached_pic"]
+            cmd += ["-c:v", "copy"] if is_jpeg else ["-c:v", "mjpeg", "-q:v", "3"]
+        cmd += [
             "-movflags", "+faststart",
             "-metadata", f"artist={job.author}",
             "-metadata", f"album_artist={job.author}",

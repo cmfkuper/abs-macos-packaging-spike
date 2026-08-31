@@ -66,13 +66,36 @@
           </div>
           <div id="output-error" class="error" hidden></div>
           <div id="form-error" class="error" hidden></div>
-          <div class="actions"><button class="btn primary" id="start-btn">Rip Disc 1</button></div>
+          <div class="actions">
+            <button class="btn" id="find-btn" disabled>Find this book</button>
+            <button class="btn primary" id="start-btn">Rip Disc 1</button>
+          </div>
         </div>
         <aside class="cover">
           <p class="paneltitle">Cover Art</p>
-          <div class="well sunken">
-            <span class="ph">No cover yet.</span>
-            <span class="ph">Search results will appear here<br>after the first disc is read.</span>
+          <div class="well sunken" id="cover-well">
+            <div id="cover-placeholder">
+              <span class="ph">No cover yet.</span>
+              <span class="ph">Type the title, then press<br>&ldquo;Find this book&rdquo;.</span>
+            </div>
+            <div id="lookup-status" class="ph" hidden></div>
+            <div id="carousel" hidden>
+              <div class="car-main">
+                <button class="btn car-arrow" id="car-prev"><svg width="7" height="10" viewBox="0 0 7 10"><path fill="var(--c-black)" d="M6 0h1v10H6zM4 1h2v8H4zM2 3h2v4H2zM0 4h2v2H0z"/></svg></button>
+                <div class="car-coverbox sunken" id="car-coverbox"><img id="car-img" alt=""><span id="car-noimg" class="ph" hidden>No cover<br>image</span></div>
+                <button class="btn car-arrow" id="car-next"><svg width="7" height="10" viewBox="0 0 7 10"><path fill="var(--c-black)" d="M0 0h1v10H0zM1 1h2v8H1zM3 3h2v4H3zM5 4h2v2H5z"/></svg></button>
+              </div>
+              <div class="car-dots" id="car-dots"></div>
+              <div class="car-meta">
+                <div id="car-title" class="car-t"></div>
+                <div id="car-author"></div>
+                <div id="car-year" class="dim"></div>
+              </div>
+              <div class="car-actions">
+                <button class="btn" id="car-use">Use this one</button>
+                <button class="btn" id="car-none">None of these</button>
+              </div>
+            </div>
           </div>
         </aside>
       </div>

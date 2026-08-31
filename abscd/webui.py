@@ -17,7 +17,9 @@ from pathlib import Path
 
 import webview
 
-from . import cdrom, engine
+import shutil
+
+from . import cdrom, engine, metadata
 from .settings import QUALITY_TIERS, Settings, check_output_folder
 
 PROGRESS_MIN_INTERVAL = 0.1  # seconds between progress pushes to the bridge
@@ -79,6 +81,15 @@ class JsApi:
     def set_audio_quality(self, tier):
         return self._backend.set_audio_quality(tier)
 
+    def search_books(self, title, author):
+        return self._backend.search_books(title, author)
+
+    def select_result(self, index):
+        return self._backend.select_result(index)
+
+    def clear_selection(self):
+        return self._backend.clear_selection()
+
     def minimize(self):
         return self._backend.minimize()
 
@@ -97,6 +108,8 @@ class Backend:
         self.job: engine.Job | None = None
         self._close_armed_until = 0.0
         self.ui_scale = 1.0
+        self.search_results: list = []
+        self.pending_cover = None  # Path of the cached, user-chosen cover
 
     # ---------- output folder ----------
 
@@ -150,6 +163,45 @@ class Backend:
         self.settings.save()
         return {"ok": True, "audio_quality": tier}
 
+    # ---------- metadata lookup (screen 1, optional) ----------
+
+    def search_books(self, title: str, author: str):
+        title, author = (title or "").strip(), (author or "").strip()
+        if not title:
+            return {"ok": False, "error": "Type a title first."}
+        try:
+            results = metadata.search(title, author)
+        except Exception:  # noqa: BLE001 — lookup is optional, never blocks
+            return {"ok": False,
+                    "error": "Couldn't reach the book services — "
+                             "your typed details will be used."}
+        metadata.fetch_thumbs(results)
+        self.search_results = results
+        self.pending_cover = None
+        return {"ok": True, "results": [
+            {"title": r["title"], "author": r["author"], "year": r["year"],
+             "edition": r["edition"], "thumb": r["thumb"], "source": r["source"]}
+            for r in results]}
+
+    def select_result(self, index: int):
+        try:
+            result = self.search_results[int(index)]
+        except (IndexError, ValueError, TypeError):
+            return {"ok": False, "error": "That result is no longer available."}
+        self.pending_cover = metadata.download_cover(result)
+        cover_data = ""
+        if self.pending_cover is not None:
+            try:
+                cover_data = metadata._data_uri(self.pending_cover.read_bytes())
+            except OSError:
+                self.pending_cover = None
+        return {"ok": True, "title": result["title"], "author": result["author"],
+                "year": result["year"], "cover_data": cover_data}
+
+    def clear_selection(self):
+        self.pending_cover = None
+        return True
+
     def start_job(self, author: str, title: str, year: str, drive: str):
         author, title, year = author.strip(), title.strip(), year.strip()
         drive = (drive or "").strip().rstrip(":")
@@ -169,6 +221,14 @@ class Backend:
             return {"ok": False, "error": folder_error + " — choose a new folder."}
 
         self.job = engine.Job.create(self.output_root, author, title, year)
+        if self.pending_cover is not None:
+            # Stash the chosen cover with the job so a crash/resume keeps it.
+            try:
+                self.job.work_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(self.pending_cover,
+                                self.job.work_dir / "cover.img")
+            except OSError:
+                pass
         self.cancel_flag.clear()
         while not self.disc_answer.empty():  # drop stale answers from a prior run
             self.disc_answer.get_nowait()
@@ -314,10 +374,12 @@ class Backend:
                     break
 
             tier = QUALITY_TIERS[self.settings.audio_quality]
+            cover = job.work_dir / "cover.img"
             encoder = engine.Encoder(
-                job, bitrate=tier["bitrate"], channels=tier["channels"])
+                job, bitrate=tier["bitrate"], channels=tier["channels"],
+                cover=cover if cover.is_file() else None)
             self._emit("assembling", path=str(encoder.output_path),
-                       discs=len(job.discs))
+                       discs=len(job.discs), has_cover=cover.is_file())
             self._emit("stage", text="Assembling discs and converting to M4B…")
             self._emit("progress", done=0, total=1)
             out = encoder.encode(
