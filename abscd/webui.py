@@ -289,7 +289,7 @@ def main():
 
     backend = Backend()
     window = webview.create_window(
-        "Audiobook CD → M4B", html=load_html(), js_api=JsApi(backend),
+        "Audiobook Bob", html=load_html(), js_api=JsApi(backend),
         width=680, height=640, min_size=(560, 480))
     backend.window = window
     window.events.closing += backend.on_closing

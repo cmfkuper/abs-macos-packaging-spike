@@ -1,11 +1,11 @@
-# Audiobook CD → M4B Ripper
+# Audiobook Bob
 
 A streamlined replacement for Fre:ac: rips audiobook CDs one disc at a time and
 assembles them into a single chaptered `.m4b` ready for Audiobookshelf.
 
 ## How to use it
 
-1. Double-click **`Audiobook Ripper.pyw`**.
+1. Double-click **`Audiobook Bob.pyw`**.
 2. Answer the three questions — **Author**, **Book title**, **Year published**.
 3. Insert **Disc 1** and press **Start ripping**.
 4. When the disc finishes it ejects automatically. Insert the next disc and press
@@ -42,7 +42,7 @@ assembles them into a single chaptered `.m4b` ready for Audiobookshelf.
 
 ## Files
 
-- `Audiobook Ripper.pyw` — double-click launcher (no console window)
+- `Audiobook Bob.pyw` — double-click launcher (no console window)
 - `abscd/cdrom.py` — raw CD audio access (Windows DeviceIoControl, no drivers)
 - `abscd/engine.py` — rip-to-WAV, job state/resume, ffmpeg M4B assembly
 - `abscd/gui.py` — the window
