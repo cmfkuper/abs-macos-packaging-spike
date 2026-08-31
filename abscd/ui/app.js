@@ -258,7 +258,7 @@ function renderCarousel() {
   $("car-title").textContent = r.title;
   $("car-author").textContent = r.author;
   $("car-year").textContent =
-    [r.year, r.edition].filter(Boolean).join(" — ") || " ";
+    [r.year, r.edition, r.source].filter(Boolean).join(" — ") || " ";
 
   const selectedHere = state.carSelected === state.carPos;
   $("car-coverbox").classList.toggle("selected", selectedHere);
@@ -309,7 +309,8 @@ function useResult() {
     if (!res.ok) { lookupStatus(res.error); return; }
     $("title").value = res.title || $("title").value;
     $("author").value = res.author || $("author").value;
-    if (res.year) $("year").value = res.year;
+    // Year recorded is deliberately untouched: provider dates describe an
+    // edition's release, not the recording being ripped.
     state.carSelected = idx;
     state.coverData = res.cover_data || null;
     renderCarousel();

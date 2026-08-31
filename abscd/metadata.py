@@ -1,5 +1,11 @@
-"""Book metadata lookup for screen 1: Google Books first, Open Library as
-fallback. Both free, no API key, stdlib urllib only.
+"""Book metadata lookup for screen 1. Provider order:
+
+1. iTunes (entity=audiobook) — the only one with real audiobook editions,
+   so its years/covers describe the audio release, not a print edition
+2. Google Books
+3. Open Library
+
+All free, no API key, stdlib urllib only.
 
 Deliberately fetches ONLY title / author / year / edition text / cover images.
 Never chapter names or timings — tracks stay exactly as ripped.
@@ -11,6 +17,7 @@ import base64
 import hashlib
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +43,46 @@ def _get_json(url: str) -> dict:
 def _year_of(text: str) -> str:
     m = re.search(r"\d{4}", text or "")
     return m.group(0) if m else ""
+
+
+# iTunes allows 20 requests/minute/IP; keep a polite gap between searches.
+_ITUNES_MIN_INTERVAL = 3.1
+_last_itunes_call = 0.0
+
+
+def search_itunes(title: str, author: str) -> list[dict]:
+    global _last_itunes_call
+    wait = _ITUNES_MIN_INTERVAL - (time.monotonic() - _last_itunes_call)
+    if wait > 0:
+        time.sleep(wait)
+    _last_itunes_call = time.monotonic()
+
+    term = f"{title} {author}".strip()
+    url = ("https://itunes.apple.com/search?"
+           + urllib.parse.urlencode({"term": term, "entity": "audiobook",
+                                     "country": "us", "limit": MAX_RESULTS}))
+    data = _get_json(url)
+    results = []
+    for item in (data.get("results") or [])[:MAX_RESULTS]:  # iTunes ignores limit=
+        name = (item.get("collectionName") or "").strip()
+        # iTunes appends "(Unabridged)"/"(Abridged)": show it as the edition,
+        # strip it from the title that goes into the form / folder name.
+        m = re.search(r"\s*\((unabridged|abridged)\)\s*$", name, re.IGNORECASE)
+        edition = m.group(1).title() if m else ""
+        clean_title = name[:m.start()].strip() if m else name
+        art = item.get("artworkUrl100") or ""
+        results.append({
+            "title": clean_title,
+            "author": item.get("artistName") or "",
+            "year": _year_of(item.get("releaseDate")),
+            "edition": edition,
+            "thumb_url": art,
+            # mzstatic artwork URLs end in "<size>x<size>bb.jpg"; asking for
+            # 600x600bb serves a 600px render of the same asset
+            "cover_url": re.sub(r"100x100bb", "600x600bb", art) if art else "",
+            "source": "iTunes",
+        })
+    return results
 
 
 def search_google_books(title: str, author: str) -> list[dict]:
@@ -89,21 +136,21 @@ def search_open_library(title: str, author: str) -> list[dict]:
 
 
 def search(title: str, author: str) -> list[dict]:
-    """Google Books first; Open Library if Google errors or finds nothing.
-    Raises only if BOTH providers fail outright."""
-    google_error = None
-    try:
-        results = search_google_books(title, author)
-        if results:
-            return results
-    except Exception as exc:  # noqa: BLE001 — provider errors fall through
-        google_error = exc
-    try:
-        return search_open_library(title, author)
-    except Exception:
-        if google_error is not None:
-            raise google_error
-        raise
+    """iTunes -> Google Books -> Open Library. A provider that errors (429
+    included) or finds nothing falls through to the next; raises only if
+    every provider fails outright."""
+    first_error = None
+    for provider in (search_itunes, search_google_books, search_open_library):
+        try:
+            results = provider(title, author)
+            if results:
+                return results
+        except Exception as exc:  # noqa: BLE001 — fall through to next provider
+            if first_error is None:
+                first_error = exc
+    if first_error is not None:
+        raise first_error
+    return []
 
 
 def _data_uri(raw: bytes) -> str:
