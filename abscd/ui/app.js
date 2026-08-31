@@ -284,6 +284,22 @@ function backToSetup() {
   $("author").focus();
 }
 
+/* The monitor scales by --ui-scale; that would leave the pixel scenes at a
+   non-integer number of device pixels per scene pixel (uneven nearest-neighbor
+   columns). Compensate per scene: pick the largest whole device-pixel scale
+   that fits and zoom the svg so scene px x total zoom x devicePixelRatio is an
+   integer. Scenes render slightly smaller but perfectly even. */
+function snapScenes(uiScale) {
+  const dpr = window.devicePixelRatio || 1;
+  ["rip-anim", "asm-anim"].forEach((id) => {
+    const svg = $(id);
+    if (!svg) return;
+    const devicePerScenePx = 3 * uiScale * dpr;   // scenes sit at 3x in CSS
+    const k = Math.max(1, Math.floor(devicePerScenePx));
+    svg.style.zoom = k / devicePerScenePx;
+  });
+}
+
 function init() {
   ddDrive = makeDropdown("dd-drive", null);
   ddQuality = makeDropdown("dd-quality", (tier) => {
@@ -295,6 +311,7 @@ function init() {
                      info.drives[0] || null);
     ddQuality.setItems(QUALITY_ITEMS, info.audio_quality);
     applyOutputStatus(info);
+    snapScenes(info.ui_scale || 1);
     if (info.drives.length === 0) {
       $("form-error").textContent = "No optical drive was found on this computer.";
       show("form-error", true);

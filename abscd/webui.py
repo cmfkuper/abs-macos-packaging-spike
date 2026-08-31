@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import queue
+import sys
 import threading
 import time
 from pathlib import Path
@@ -20,6 +21,39 @@ from . import cdrom, engine
 from .settings import QUALITY_TIERS, Settings, check_output_folder
 
 PROGRESS_MIN_INTERVAL = 0.1  # seconds between progress pushes to the bridge
+
+# The CRT design's outer window size at scale 1.0 (CSS content plus the
+# frameless window chrome overhead measured on WebView2).
+BASE_W, BASE_H = 1166, 826
+MIN_SCALE = 0.7
+
+TOO_SMALL_HTML = """<!DOCTYPE html><html><head><meta charset='utf-8'>
+<title>Audiobook Bob</title></head>
+<body style='font-family:Segoe UI,sans-serif;font-size:16px;margin:2rem'>
+<h2 style='margin:0 0 .5rem'>This screen is too small for Audiobook Bob.</h2>
+<p>The window needs roughly 1170 &times; 830 logical pixels, and this display
+(after Windows display scaling) has less than 70% of that.</p>
+<p>Lowering the display scaling in Windows Settings &rarr; System &rarr;
+Display usually frees up enough room.</p>
+</body></html>"""
+
+
+def _work_area():
+    """Primary monitor's usable rectangle (excludes the taskbar), in the same
+    logical coordinate space pywebview positions windows in. Windows only."""
+    if sys.platform != "win32":
+        s = webview.screens[0]
+        return 0, 0, s.width, s.height
+    import ctypes
+
+    class RECT(ctypes.Structure):
+        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                    ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+    rect = RECT()
+    ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
+    return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
+
 
 
 class JsApi:
@@ -62,6 +96,7 @@ class Backend:
         self.disc_answer: queue.Queue = queue.Queue()
         self.job: engine.Job | None = None
         self._close_armed_until = 0.0
+        self.ui_scale = 1.0
 
     # ---------- output folder ----------
 
@@ -105,6 +140,7 @@ class Backend:
     def get_init(self):
         return {"drives": cdrom.list_optical_drives(),
                 "audio_quality": self.settings.audio_quality,
+                "ui_scale": self.ui_scale,
                 **self._output_status()}
 
     def set_audio_quality(self, tier: str):
@@ -318,14 +354,27 @@ def main():
     backend = Backend()
     # Frameless: the CRT bezel is the window; the fake Win95 title bar drags
     # (class pywebview-drag-region) and its ✕/minimize go through the bridge.
-    # Sized for a 1536x864 logical display (1080p at 125% scaling) and centered
-    # explicitly -- default OS placement hangs the bottom off-screen.
-    win_w, win_h = 1166, 826
-    screen = webview.screens[0]
-    pos_x = max(0, (screen.width - win_w) // 2)
-    pos_y = max(0, (screen.height - win_h) // 2)
+    # The CRT is authored at BASE_W x BASE_H logical px and scaled down as one
+    # unit (CSS zoom via --ui-scale) to fit the monitor's usable work area, so
+    # any Windows display-scaling factor works. Below MIN_SCALE the UI would be
+    # illegibly small; show a plain message instead.
+    wa_x, wa_y, wa_w, wa_h = _work_area()
+    scale = min(wa_w / BASE_W, wa_h / BASE_H, 1.0)
+    if scale < MIN_SCALE:
+        webview.create_window(
+            "Audiobook Bob", html=TOO_SMALL_HTML,
+            width=560, height=280, resizable=False)
+        webview.start()
+        return
+    backend.ui_scale = round(scale, 4)
+    win_w = round(BASE_W * scale)
+    win_h = round(BASE_H * scale)
+    pos_x = wa_x + max(0, (wa_w - win_w) // 2)
+    pos_y = wa_y + max(0, (wa_h - win_h) // 2)
+    html = load_html().replace(
+        "<body>", f'<body style="--ui-scale:{backend.ui_scale}">', 1)
     window = webview.create_window(
-        "Audiobook Bob", html=load_html(), js_api=JsApi(backend),
+        "Audiobook Bob", html=html, js_api=JsApi(backend),
         width=win_w, height=win_h, x=pos_x, y=pos_y,
         frameless=True, easy_drag=False, resizable=False)
     backend.window = window

@@ -28,7 +28,7 @@ body{
 }
 
 /* ============ THE MONITOR ============ */
-.monitor{width:1136px;background:var(--bezel);border-radius:12px;padding:14px;
+.monitor{width:1136px;zoom:var(--ui-scale,1);background:var(--bezel);border-radius:12px;padding:14px;
   box-shadow:inset 2px 2px 0 var(--bezel-hi), inset -2px -2px 0 var(--bezel-lo), 0 0 0 1px var(--bezel-edge)}
 .tube{background:var(--c-black);border-radius:18px;padding:4px}
 .screen{background:var(--c-teal);border-radius:14px;padding:12px 0;position:relative;overflow:hidden}
