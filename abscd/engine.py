@@ -101,8 +101,9 @@ class Job:
 
     author: str
     title: str
-    year: str
-    root: Path  # Output/Author/Title (Year)
+    narrator: str
+    edition: str  # Unabridged | Abridged | Unknown
+    root: Path  # Output/Author/Title
     discs: list[DiscRecord] = field(default_factory=list)
 
     @property
@@ -111,21 +112,30 @@ class Job:
 
     @property
     def base_name(self) -> str:
-        return f"{sanitize(self.author)}, {sanitize(self.title)}, {sanitize(self.year)}"
+        return f"{sanitize(self.author)}, {sanitize(self.title)}"
 
     @property
     def state_file(self) -> Path:
         return self.work_dir / "job.json"
 
     @classmethod
-    def create(cls, output_root: Path, author: str, title: str, year: str) -> "Job":
-        root = output_root / sanitize(author) / f"{sanitize(title)} ({sanitize(year)})"
-        job = cls(author=author.strip(), title=title.strip(), year=year.strip(), root=root)
+    def create(cls, output_root: Path, author: str, title: str,
+               narrator: str = "", edition: str = "Unknown") -> "Job":
+        root = output_root / sanitize(author) / sanitize(title)
+        job = cls(author=author.strip(), title=title.strip(),
+                  narrator=narrator.strip(), edition=edition.strip() or "Unknown",
+                  root=root)
         existing = job.state_file
         if existing.is_file():
             try:
                 saved = json.loads(existing.read_text(encoding="utf-8"))
                 job.discs = [DiscRecord(**d) for d in saved.get("discs", [])]
+                # a resumed job keeps its saved narrator/edition unless the
+                # user typed something fresh this time
+                if not job.narrator:
+                    job.narrator = saved.get("narrator", "")
+                if job.edition == "Unknown":
+                    job.edition = saved.get("edition", "Unknown")
             except (json.JSONDecodeError, TypeError, KeyError):
                 job.discs = []
         return job
@@ -133,7 +143,8 @@ class Job:
     def save(self) -> None:
         self.work_dir.mkdir(parents=True, exist_ok=True)
         payload = {
-            "author": self.author, "title": self.title, "year": self.year,
+            "author": self.author, "title": self.title,
+            "narrator": self.narrator, "edition": self.edition,
             "discs": [vars(d) for d in self.discs],
         }
         self.state_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -291,13 +302,24 @@ class Encoder:
             cmd += ["-map", "2:v", "-disposition:v:0", "attached_pic"]
             cmd += ["-c:v", "copy"] if is_jpeg else ["-c:v", "mjpeg", "-q:v", "3"]
         cmd += [
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+use_metadata_tags",  # freeform tags (EDITION) survive
             "-metadata", f"artist={job.author}",
             "-metadata", f"album_artist={job.author}",
             "-metadata", f"title={job.title}",
             "-metadata", f"album={job.title}",
-            "-metadata", f"date={job.year}",
             "-metadata", "genre=Audiobook",
+        ]
+        if job.narrator:
+            # Audiobookshelf reads narrators from the composer tag
+            # (server/scanner/AudioFileScanner.js: tagComposer -> narrators)
+            cmd += ["-metadata", f"composer={job.narrator}"]
+        # ABS has no audio-tag mapping for abridged status; EDITION is a
+        # freeform atom for future tooling, and an Abridged book also gets a
+        # visible subtitle since ABS does read tagSubtitle.
+        cmd += ["-metadata", f"EDITION={job.edition}"]
+        if job.edition.lower() == "abridged":
+            cmd += ["-metadata", "subtitle=Abridged"]
+        cmd += [
             "-f", "mp4",
             "-progress", "pipe:1", "-nostats",
             str(out),

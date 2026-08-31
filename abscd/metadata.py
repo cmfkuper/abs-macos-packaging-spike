@@ -153,6 +153,60 @@ def search(title: str, author: str) -> list[dict]:
     return []
 
 
+def lookup_narrator(title: str, author: str, prefer_edition: str = "") -> dict:
+    """Narrator (and format) for an audiobook via Audnexus (audnex.us), a
+    read-only cache of the Audible catalogue. Audnexus is keyed by ASIN only,
+    so the ASIN is resolved first through the public Audible catalog search.
+    Misses and errors return empty strings -- the caller types it instead."""
+    # Audible often titles an edition without the subtitle iTunes uses
+    # ("The Lost World" vs "The Lost World: A Novel"), so search both forms.
+    queries = [title]
+    if ":" in title:
+        queries.append(title.split(":", 1)[0].strip())
+    products, seen_asins = [], set()
+    for q in queries:
+        params = {"title": q, "num_results": "5"}
+        if author:
+            params["author"] = author
+        try:
+            found = _get_json("https://api.audible.com/1.0/catalog/products?"
+                              + urllib.parse.urlencode(params))
+        except Exception:  # noqa: BLE001 -- quiet failure by design
+            continue
+        for p in found.get("products") or []:
+            if p.get("asin") and p["asin"] not in seen_asins:
+                seen_asins.add(p["asin"])
+                products.append(p)
+    if not products:
+        return {"narrator": "", "edition": ""}
+    # The user may have picked a specific edition (iTunes marks abridgement);
+    # prefer the Audible product whose format matches it, since abridged and
+    # unabridged recordings usually have different narrators.
+    prefer = prefer_edition.strip().lower()
+    fallback = None
+    for product in products[:8]:
+        asin = product.get("asin")
+        if not asin:
+            continue
+        try:
+            book = _get_json(f"https://api.audnex.us/books/{asin}")
+        except Exception:  # noqa: BLE001
+            continue
+        narrator = ", ".join(n.get("name", "") for n in book.get("narrators") or []
+                             if n.get("name"))
+        fmt = (book.get("formatType") or "").lower()
+        edition = {"unabridged": "Unabridged", "abridged": "Abridged"}.get(fmt, "")
+        if not narrator and not edition:
+            continue
+        if prefer in ("unabridged", "abridged") and fmt == prefer:
+            return {"narrator": narrator, "edition": edition}
+        if fallback is None:
+            fallback = {"narrator": narrator, "edition": edition}
+        if prefer not in ("unabridged", "abridged"):
+            return fallback
+    return fallback or {"narrator": "", "edition": ""}
+
+
 def _data_uri(raw: bytes) -> str:
     mime = "image/png" if raw[:8].startswith(b"\x89PNG") else "image/jpeg"
     return f"data:{mime};base64," + base64.b64encode(raw).decode("ascii")

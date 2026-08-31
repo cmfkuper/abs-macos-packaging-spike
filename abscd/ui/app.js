@@ -80,7 +80,7 @@ function makeDropdown(rootId, onChange) {
   return dd;
 }
 
-let ddDrive, ddQuality;
+let ddDrive, ddQuality, ddEdition;
 
 /* ---------------- screens & status bar ---------------- */
 
@@ -309,6 +309,8 @@ function useResult() {
     if (!res.ok) { lookupStatus(res.error); return; }
     $("title").value = res.title || $("title").value;
     $("author").value = res.author || $("author").value;
+    if (res.narrator) $("narrator").value = res.narrator;
+    ddEdition.set(res.edition || "Unknown");
     // Year recorded is deliberately untouched: provider dates describe an
     // edition's release, not the recording being ripped.
     state.carSelected = idx;
@@ -352,8 +354,9 @@ function applyOutputStatus(info) {
 function startRip() {
   const author = $("author").value.trim();
   const title = $("title").value.trim();
-  const year = $("year").value.trim();
-  window.pywebview.api.start_job(author, title, year, ddDrive.value || "").then((res) => {
+  const narrator = $("narrator").value.trim();
+  window.pywebview.api.start_job(author, title, narrator,
+      ddEdition.value || "Unknown", ddDrive.value || "").then((res) => {
     if (!res.ok) {
       $("form-error").textContent = res.error;
       show("form-error", true);
@@ -378,7 +381,8 @@ function startRip() {
 }
 
 function backToSetup() {
-  ["author", "title", "year"].forEach((id) => { $(id).value = ""; });
+  ["author", "title", "narrator"].forEach((id) => { $(id).value = ""; });
+  ddEdition.set("Unknown");
   resetLookup();
   $("find-btn").disabled = true;
   stopElapsed();
@@ -419,6 +423,12 @@ function init() {
   ddQuality = makeDropdown("dd-quality", (tier) => {
     window.pywebview.api.set_audio_quality(tier);
   });
+  ddEdition = makeDropdown("dd-edition", null);
+  ddEdition.setItems([
+    { value: "Unabridged", label: "Unabridged" },
+    { value: "Abridged", label: "Abridged" },
+    { value: "Unknown", label: "Unknown" },
+  ], "Unknown");
 
   window.pywebview.api.get_init().then((info) => {
     ddDrive.setItems(info.drives.map((d) => ({ value: d, label: d + ":" })),

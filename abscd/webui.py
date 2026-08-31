@@ -69,8 +69,8 @@ class JsApi:
     def get_init(self):
         return self._backend.get_init()
 
-    def start_job(self, author, title, year, drive):
-        return self._backend.start_job(author, title, year, drive)
+    def start_job(self, author, title, narrator, edition, drive):
+        return self._backend.start_job(author, title, narrator, edition, drive)
 
     def answer(self, value):
         return self._backend.answer(value)
@@ -195,21 +195,29 @@ class Backend:
                 cover_data = metadata._data_uri(self.pending_cover.read_bytes())
             except OSError:
                 self.pending_cover = None
+        looked_up = metadata.lookup_narrator(
+            result["title"], result["author"],
+            prefer_edition=result.get("edition") or "")
+        # the edition marker on the result the user actually picked wins
+        edition = result.get("edition") or looked_up["edition"] or "Unknown"
         return {"ok": True, "title": result["title"], "author": result["author"],
-                "year": result["year"], "cover_data": cover_data}
+                "narrator": looked_up["narrator"], "edition": edition,
+                "cover_data": cover_data}
 
     def clear_selection(self):
         self.pending_cover = None
         return True
 
-    def start_job(self, author: str, title: str, year: str, drive: str):
-        author, title, year = author.strip(), title.strip(), year.strip()
+    def start_job(self, author: str, title: str, narrator: str, edition: str,
+                  drive: str):
+        author, title = author.strip(), title.strip()
+        narrator, edition = (narrator or "").strip(), (edition or "").strip()
         drive = (drive or "").strip().rstrip(":")
         if self.worker and self.worker.is_alive():
             return {"ok": False, "error": "A rip is already in progress."}
-        if not author or not title or not year:
+        if not author or not title:
             return {"ok": False,
-                    "error": "Please fill in the author, book title, and date recorded."}
+                    "error": "Please fill in the author and book title."}
         if not drive:
             return {"ok": False, "error": "No optical drive was found on this computer."}
         if not engine.locate_ffmpeg():
@@ -220,7 +228,8 @@ class Backend:
         if folder_error is not None:
             return {"ok": False, "error": folder_error + " — choose a new folder."}
 
-        self.job = engine.Job.create(self.output_root, author, title, year)
+        self.job = engine.Job.create(self.output_root, author, title,
+                                     narrator=narrator, edition=edition)
         if self.pending_cover is not None:
             # Stash the chosen cover with the job so a crash/resume keeps it.
             try:
