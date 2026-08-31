@@ -318,14 +318,20 @@ def main():
     backend = Backend()
     # Frameless: the CRT bezel is the window; the fake Win95 title bar drags
     # (class pywebview-drag-region) and its ✕/minimize go through the bridge.
+    # Sized for a 1536x864 logical display (1080p at 125% scaling) and centered
+    # explicitly -- default OS placement hangs the bottom off-screen.
+    win_w, win_h = 1166, 826
+    screen = webview.screens[0]
+    pos_x = max(0, (screen.width - win_w) // 2)
+    pos_y = max(0, (screen.height - win_h) // 2)
     window = webview.create_window(
         "Audiobook Bob", html=load_html(), js_api=JsApi(backend),
-        width=1154, height=880, frameless=True, easy_drag=False,
-        resizable=False)
+        width=win_w, height=win_h, x=pos_x, y=pos_y,
+        frameless=True, easy_drag=False, resizable=False)
     backend.window = window
     window.events.closing += backend.on_closing
     threading.Thread(target=backend.dispatch_forever, daemon=True).start()
-    webview.start(window)
+    webview.start()  # positional arg would be treated as a callable
 
 
 if __name__ == "__main__":

@@ -28,19 +28,19 @@ body{
 }
 
 /* ============ THE MONITOR ============ */
-.monitor{width:1140px;background:var(--bezel);border-radius:12px;padding:20px;
+.monitor{width:1136px;background:var(--bezel);border-radius:12px;padding:14px;
   box-shadow:inset 2px 2px 0 var(--bezel-hi), inset -2px -2px 0 var(--bezel-lo), 0 0 0 1px var(--bezel-edge)}
 .tube{background:var(--c-black);border-radius:18px;padding:4px}
-.screen{background:var(--c-teal);border-radius:14px;padding:32px 0;position:relative;overflow:hidden}
+.screen{background:var(--c-teal);border-radius:14px;padding:12px 0;position:relative;overflow:hidden}
 .screen::after{content:"";position:absolute;inset:0;border-radius:14px;pointer-events:none;
   background:radial-gradient(ellipse 78% 78% at 50% 48%, transparent 62%, rgba(0,0,0,.09) 100%)}
-.chin{display:flex;justify-content:space-between;align-items:center;padding:14px 10px 2px}
+.chin{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 0}
 .brand{font-family:Tahoma,Geneva,sans-serif;font-size:12px;letter-spacing:.2em;color:var(--bezel-lo);text-shadow:1px 1px 0 var(--bezel-hi)}
 .power{display:flex;align-items:center;gap:8px;font-family:Tahoma,Geneva,sans-serif;font-size:10px;letter-spacing:.16em;color:var(--bezel-lo)}
 .power .led{width:7px;height:7px;background:var(--c-green);display:inline-block;box-shadow:0 0 0 1px var(--bezel-lo)}
 
 /* ============ WIN95 CHROME ============ */
-.win{width:1000px;height:700px;margin:0 auto;display:flex;flex-direction:column;
+.win{width:1000px;height:690px;margin:0 auto;display:flex;flex-direction:column;
   font-family:Tahoma,Geneva,'MS Sans Serif','Segoe UI',sans-serif;font-size:15px;color:var(--c-black);
   background:var(--c-silver);
   box-shadow:inset -1px -1px 0 var(--c-black), inset 1px 1px 0 var(--c-silver),
@@ -76,18 +76,19 @@ body{
 .btn:focus-visible{outline:1px dotted var(--c-black);outline-offset:-5px}
 
 /* form (screen 1) */
-.form{flex:1;display:flex;flex-direction:column;gap:18px;padding:18px 4px 0 2px}
+.form{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px;padding:18px 4px 0 2px}
 .row{display:grid;grid-template-columns:32px 150px 1fr;align-items:center;gap:14px}
+.row > *{min-width:0}
 .row label{font-size:15px}
 .ic{flex:none;display:block;shape-rendering:crispEdges;image-rendering:pixelated}
-.field{height:32px;display:flex;align-items:center;padding:0 9px;font-size:15px;white-space:nowrap;overflow:hidden}
+.field{height:32px;display:flex;align-items:center;padding:0 9px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .field.grow{flex:1}
 input.field{font:inherit;font-size:15px;border:0;width:100%;color:var(--c-black);user-select:text;cursor:text}
 input.field:focus{outline:1px dotted var(--c-black);outline-offset:-4px}
 .w-year{width:120px}
 
 /* custom pixel dropdowns */
-.dd{position:relative;padding-right:30px;cursor:default}
+.dd{position:relative;padding-right:30px;cursor:default;overflow:visible}
 .dd:focus-visible{outline:1px dotted var(--c-black);outline-offset:-4px}
 .ddbtn{position:absolute;top:2px;right:2px;bottom:2px;width:24px;display:grid;place-items:center;
   background:var(--c-silver);
@@ -100,7 +101,7 @@ input.field:focus{outline:1px dotted var(--c-black);outline-offset:-4px}
 .ddlist .opt{padding:6px 9px;font-size:15px;white-space:nowrap}
 .ddlist .opt.sel,.ddlist .opt:hover{background:var(--c-navy);color:var(--c-white)}
 
-.pathrow{display:flex;gap:8px;align-items:stretch}
+.pathrow{display:flex;gap:8px;align-items:stretch;min-width:0}
 .btn.small{padding:0 16px;font-size:15px}
 .actions{margin-top:28px;padding-left:196px}
 .cover{width:330px;flex:none;display:flex;flex-direction:column;gap:8px;padding-top:18px}
@@ -111,7 +112,7 @@ input.field:focus{outline:1px dotted var(--c-black);outline-offset:-4px}
 .error[hidden]{display:none}
 
 /* ripping / assembling (screens 2 & 3) */
-.rip{flex:1;display:flex;flex-direction:column;gap:14px;padding:16px 4px 0}
+.rip{flex:1;min-width:0;position:relative;display:flex;flex-direction:column;gap:14px;padding:10px 4px 0}
 .riphead{display:flex;align-items:center;gap:14px}
 .riphead .booktitle{font-size:20px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .riphead .disc{font-size:16px}
@@ -120,14 +121,14 @@ input.field:focus{outline:1px dotted var(--c-black);outline-offset:-4px}
 .plabel{position:absolute;inset:0;display:grid;place-items:center;font-size:15px;font-weight:700}
 .animbox{width:700px;height:300px;margin:0 auto;flex:none;display:grid;place-items:center}
 .donewrap{display:flex;flex-direction:column;gap:6px;min-height:0}
-.donelist{height:104px;overflow-y:auto;padding:4px}
+.donelist{height:96px;overflow-y:auto;padding:4px}
 .donelist .drow{display:flex;gap:10px;padding:5px 8px;font-size:15px}
 .donelist .drow .num{width:80px;font-weight:700}
 .donelist .drow .chk{color:var(--c-success);font-weight:700}
 .ripactions{display:flex;gap:12px;padding-left:2px;align-items:center}
 
 /* cancel confirmation strip (not in mockup; needed for real cancel flow) */
-.confirm{display:flex;gap:12px;align-items:center;padding:8px 12px;font-size:15px;
+.confirm{position:absolute;left:0;right:0;bottom:0;z-index:50;display:flex;gap:12px;align-items:center;padding:8px 12px;font-size:15px;
   background:var(--c-silver);
   box-shadow:inset -1px -1px 0 var(--c-black), inset 1px 1px 0 var(--c-white), inset -2px -2px 0 var(--c-gray)}
 .confirm[hidden]{display:none}
