@@ -1,3 +1,7 @@
+# Audiobook Bob — audiobook CD ripper.
+# Copyright (C) 2026 Chris Kuper
+# Licensed under the GNU General Public License v3.0 or later.
+# See the LICENSE file in the project root for details.
 """pywebview front end. Same worker/queue threading model as the tkinter
 version: the rip runs on a daemon thread and communicates only through the
 event queue; a dispatcher thread pushes each event to JS via evaluate_js.
@@ -41,8 +45,21 @@ Display usually frees up enough room.</p>
 
 
 def _work_area():
-    """Primary monitor's usable rectangle (excludes the taskbar), in the same
-    logical coordinate space pywebview positions windows in. Windows only."""
+    """Primary monitor's usable rectangle, in the logical top-left coordinate
+    space pywebview positions windows in. Excludes the taskbar on Windows and
+    the menu bar + Dock on macOS (NSScreen.visibleFrame)."""
+    if sys.platform == "darwin":
+        try:
+            from AppKit import NSScreen  # via pyobjc, a pywebview dependency
+            screen = NSScreen.mainScreen()
+            vis, full = screen.visibleFrame(), screen.frame()
+            # Cocoa's origin is bottom-left; convert the top offset.
+            top = full.size.height - (vis.origin.y + vis.size.height)
+            return (int(vis.origin.x), int(top),
+                    int(vis.size.width), int(vis.size.height))
+        except Exception:  # noqa: BLE001 -- fall back to the raw screen
+            s = webview.screens[0]
+            return 0, 24, s.width, s.height - 24  # assume a menu bar
     if sys.platform != "win32":
         s = webview.screens[0]
         return 0, 0, s.width, s.height
@@ -221,9 +238,7 @@ class Backend:
         if not drive:
             return {"ok": False, "error": "No optical drive was found on this computer."}
         if not engine.locate_ffmpeg():
-            return {"ok": False, "error":
-                    "ffmpeg is required to build the M4B but was not found. "
-                    "Install it with:  winget install Gyan.FFmpeg  and restart."}
+            return {"ok": False, "error": engine.FFMPEG_MISSING_MSG}
         folder_error = check_output_folder(self.output_root)
         if folder_error is not None:
             return {"ok": False, "error": folder_error + " — choose a new folder."}
@@ -419,8 +434,74 @@ class Backend:
             time.sleep(1.5)
 
 
+def _selftest() -> int:
+    """No-GUI diagnostics: imports, bundled ffmpeg, UI bundle, work area."""
+    from .uiassets import load_html
+    ok = True
+    print(f"platform: {sys.platform}  frozen: {bool(getattr(sys, 'frozen', False))}")
+    ffmpeg = engine.locate_ffmpeg()
+    print(f"ffmpeg: {ffmpeg or 'NOT FOUND'}")
+    ok = ok and bool(ffmpeg)
+    try:
+        html = load_html()
+        print(f"ui html: {len(html)} chars")
+        ok = ok and "asm-anim" in html
+    except Exception as exc:  # noqa: BLE001
+        print(f"ui html FAILED: {exc!r}")
+        ok = False
+    try:
+        if sys.platform == "darwin":
+            import webview.platforms.cocoa  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        print(f"webview backend FAILED: {exc!r}")
+        ok = False
+    print(f"drives: {cdrom.list_optical_drives()}")
+    print(f"work area: {_work_area()}")
+    print("SELFTEST:", "PASS" if ok else "FAIL")
+    return 0 if ok else 1
+
+
+def _bridgetest() -> int:
+    """Open the real window, prove the JS bridge round-trips, close."""
+    from .uiassets import load_html
+    backend = Backend()
+    window = webview.create_window(
+        "Audiobook Bob bridgetest", html=load_html(), js_api=JsApi(backend),
+        width=1151, height=816, frameless=True)
+    backend.window = window
+    threading.Thread(target=backend.dispatch_forever, daemon=True).start()
+    result = {"ok": False}
+
+    def auto(w):
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            try:
+                if w.evaluate_js("window.pywebview && window.pywebview.api ? true : false"):
+                    break
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(0.5)
+        try:
+            drives = w.evaluate_js(
+                "window.pywebview.api.get_init().then(i => i.drives)")
+            title = w.evaluate_js("document.getElementById('tbar-title').textContent")
+            result["ok"] = isinstance(drives, list) and "Audiobook Bob" in (title or "")
+            print(f"bridge drives: {drives!r}  title: {title!r}")
+        finally:
+            w.destroy()
+
+    webview.start(auto, window)
+    print("BRIDGETEST:", "PASS" if result["ok"] else "FAIL")
+    return 0 if result["ok"] else 1
+
+
 def main():
     from .uiassets import load_html
+
+    if "--selftest" in sys.argv:
+        sys.exit(_selftest())
+    if "--bridgetest" in sys.argv:
+        sys.exit(_bridgetest())
 
     backend = Backend()
     # Frameless: the CRT bezel is the window; the fake Win95 title bar drags

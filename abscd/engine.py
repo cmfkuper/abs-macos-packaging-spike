@@ -1,3 +1,7 @@
+# Audiobook Bob — audiobook CD ripper.
+# Copyright (C) 2026 Chris Kuper
+# Licensed under the GNU General Public License v3.0 or later.
+# See the LICENSE file in the project root for details.
 """Rip-and-convert engine: WAV writing, job state, and ffmpeg M4B assembly."""
 
 from __future__ import annotations
@@ -8,6 +12,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,7 +20,8 @@ from pathlib import Path
 from . import cdrom
 
 SAMPLE_RATE = cdrom.SAMPLE_RATE
-CREATE_NO_WINDOW = 0x08000000  # keep ffmpeg from flashing console windows under the GUI
+# Windows-only Popen flag (POSIX Popen raises on nonzero creationflags)
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
 class EngineError(Exception):
@@ -29,11 +35,47 @@ def sanitize(name: str) -> str:
     return cleaned or "Untitled"
 
 
+def _bundled_ffmpeg() -> str | None:
+    """ffmpeg packed inside a frozen app bundle (PyInstaller layouts vary)."""
+    if not getattr(sys, "frozen", False):
+        return None
+    name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+    exe_dir = Path(sys.executable).resolve().parent
+    roots = [exe_dir, exe_dir / "_internal"]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots.insert(0, Path(meipass))
+    if sys.platform == "darwin":
+        roots += [exe_dir.parent / "Frameworks", exe_dir.parent / "Resources"]
+    for root in roots:
+        candidate = root / name
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+FFMPEG_MISSING_MSG = (
+    "ffmpeg is required to build the M4B but was not found. "
+    + ("Install it with:  winget install Gyan.FFmpeg  and restart."
+       if sys.platform == "win32" else
+       "This copy of Audiobook Bob is missing its bundled ffmpeg - "
+       "please reinstall the app.")
+)
+
+
 def locate_ffmpeg() -> str | None:
-    """Find ffmpeg.exe: PATH first, then the standard winget install locations."""
+    """Find ffmpeg: env override, app bundle, PATH, then winget locations."""
+    override = os.environ.get("AUDIOBOOK_BOB_FFMPEG")
+    if override and Path(override).is_file():
+        return override
+    bundled = _bundled_ffmpeg()
+    if bundled:
+        return bundled
     found = shutil.which("ffmpeg")
     if found:
         return found
+    if sys.platform != "win32":
+        return None
     local = os.environ.get("LOCALAPPDATA", "")
     candidates = [Path(local) / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe"]
     packages = Path(local) / "Microsoft" / "WinGet" / "Packages"
@@ -46,7 +88,10 @@ def locate_ffmpeg() -> str | None:
 
 
 def locate_vlc() -> str | None:
-    """Find VLC, used as a rip fallback for drives that refuse raw reads."""
+    """Find VLC, used as a rip fallback for drives that refuse raw reads.
+    Windows only: on macOS the kernel reads the disc, so no fallback exists."""
+    if sys.platform != "win32":
+        return None
     for candidate in (
         shutil.which("vlc"),
         r"C:\Program Files\VideoLAN\VLC\vlc.exe",
@@ -55,6 +100,31 @@ def locate_vlc() -> str | None:
         if candidate and Path(candidate).is_file():
             return candidate
     return None
+
+
+def _copy_with_progress(src: Path, dest: Path, progress=None,
+                        should_cancel=None, chunk_size: int = 1 << 20) -> bool:
+    """Copy a file in chunks with the same callback contract as write_wav.
+    Returns False if cancelled (partial file removed)."""
+    tmp = dest.with_suffix(dest.suffix + ".partial")
+    try:
+        with open(src, "rb") as fin, open(tmp, "wb") as fout:
+            while True:
+                if should_cancel is not None and should_cancel():
+                    fout.close()
+                    tmp.unlink(missing_ok=True)
+                    return False
+                chunk = fin.read(chunk_size)
+                if not chunk:
+                    break
+                fout.write(chunk)
+                if progress is not None:
+                    progress(len(chunk))
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise EngineError(f"Could not copy {src.name}: {exc}") from exc
+    tmp.replace(dest)
+    return True
 
 
 def write_wav(path: Path, chunks, expected_frames: int, progress=None, should_cancel=None) -> bool:
@@ -187,13 +257,25 @@ class Ripper:
                 raise EngineError("Cancelled")
             if status is not None:
                 status(f"Disc {disc_number}: ripping track {index} of {len(tracks)}â¦")
-            wav = disc_dir / f"Track {index:02d}.wav"
+            source = getattr(track, "source", "")
+            ext = "aiff" if source else "wav"
+            wav = disc_dir / f"Track {index:02d}.{ext}"
 
             def tick(n, _base=done):
                 nonlocal done
                 done += n
                 if progress is not None:
                     progress(done, total_bytes)
+
+            if source:
+                # macOS: the kernel already error-corrected the audio into a
+                # mounted AIFF; ripping is a plain copy with progress.
+                completed = _copy_with_progress(
+                    Path(source), wav, progress=tick, should_cancel=should_cancel)
+                if not completed:
+                    raise EngineError("Cancelled")
+                files.append(str(wav.relative_to(self.job.work_dir)))
+                continue
 
             try:
                 chunks = self.drive.read_track(

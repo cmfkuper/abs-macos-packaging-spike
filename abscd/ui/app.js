@@ -1,3 +1,5 @@
+/* Audiobook Bob — Copyright (C) 2026 Chris Kuper.
+   GNU GPL v3.0 or later; see LICENSE in the project root. */
 /* Audiobook Bob frontend. Same event protocol as before:
    Python -> JS: window.onEvent({kind, ...})   (evaluate_js push)
    JS -> Python: window.pywebview.api.*        (js_api bridge)      */
@@ -395,7 +397,7 @@ function backToSetup() {
   show("asm-cancel-btn", true);
   toScreen("setup");
   window.pywebview.api.get_init().then((info) => {
-    ddDrive.setItems(info.drives.map((d) => ({ value: d, label: d + ":" })),
+    ddDrive.setItems(info.drives.map((d) => ({ value: d, label: /^[A-Za-z]$/.test(d) ? d + ":" : "Drive " + d })),
                      info.drives[0] || null);
     applyOutputStatus(info);
   });
@@ -431,7 +433,7 @@ function init() {
   ], "Unknown");
 
   window.pywebview.api.get_init().then((info) => {
-    ddDrive.setItems(info.drives.map((d) => ({ value: d, label: d + ":" })),
+    ddDrive.setItems(info.drives.map((d) => ({ value: d, label: /^[A-Za-z]$/.test(d) ? d + ":" : "Drive " + d })),
                      info.drives[0] || null);
     ddQuality.setItems(QUALITY_ITEMS, info.audio_quality);
     applyOutputStatus(info);

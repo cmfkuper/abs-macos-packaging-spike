@@ -5,6 +5,10 @@ on:
   push:
     paths:
       - "spike/**"
+      - "abscd/**"
+      - "tools/**"
+      - "tests/**"
+      - "Audiobook Bob.pyw"
       - ".github/workflows/macos-spike.yml"
 
 env:
@@ -169,4 +173,94 @@ jobs:
         with:
           name: ABS-Spike-macos-arm64
           path: ABS-Spike-macos-arm64.zip
+          if-no-files-found: error
+
+  build-mac-app:
+    # The real Audiobook Bob .app. Gated on build-app so the ffmpeg
+    # functional test stays a hard gate for everything that ships.
+    needs: build-app
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore the LGPL ffmpeg build
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: spike/bin/ffmpeg
+          key: ffmpeg-lgpl-${{ env.FFMPEG_VERSION }}-macos-arm64-v3
+
+      - name: Build LGPL ffmpeg from official source (cache fallback)
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 -o ffmpeg-src.tar.xz \
+            "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+          tar xf ffmpeg-src.tar.xz
+          cd "ffmpeg-${FFMPEG_VERSION}"
+          ./configure \
+            --disable-everything --disable-autodetect --disable-network \
+            --disable-doc --disable-debug --enable-static --disable-shared \
+            --disable-ffplay --disable-ffprobe \
+            --enable-protocol=file,pipe \
+            --enable-indev=lavfi \
+            --enable-demuxer=wav,aiff,concat,mov,ffmetadata,image2 \
+            --enable-decoder=pcm_s16le,pcm_s16be,pcm_u8,aac,mjpeg,wrapped_avframe \
+            --enable-parser=aac,mjpeg \
+            --enable-encoder=aac,pcm_s16be,mjpeg \
+            --enable-muxer=ipod,mp4,aiff,image2,null \
+            --enable-filter=aresample,aformat,anull,anullsrc,color,scale,format
+          make -j"$(sysctl -n hw.ncpu)"
+          mkdir -p ../spike/bin
+          cp ffmpeg ../spike/bin/ffmpeg
+
+      - name: Install pywebview and PyInstaller
+        run: pip install pywebview pyinstaller
+
+      - name: Bake the UI bundle
+        run: python tools/build_ui.py
+
+      - name: Mac parser fixture tests
+        run: python tests/test_mac_parsers.py
+
+      - name: Engine AIFF end-to-end (real Ripper + Encoder on the runner)
+        run: |
+          chmod +x spike/bin/ffmpeg
+          AUDIOBOOK_BOB_FFMPEG="$PWD/spike/bin/ffmpeg" python tests/test_engine_aiff.py
+
+      - name: Build the .app
+        run: |
+          pyinstaller --noconfirm --windowed \
+            --name "Audiobook Bob" \
+            --osx-bundle-identifier "com.chris.audiobook-bob" \
+            --add-binary "spike/bin/ffmpeg:." \
+            --hidden-import webview.platforms.cocoa \
+            "Audiobook Bob.pyw"
+          du -sh "dist/Audiobook Bob.app"
+
+      - name: Verify code signature
+        run: codesign --verify --deep --verbose=2 "dist/Audiobook Bob.app"
+
+      - name: In-bundle self test (imports, bundled ffmpeg, UI)
+        run: |
+          "dist/Audiobook Bob.app/Contents/MacOS/Audiobook Bob" --selftest
+
+      - name: In-bundle bridge test (real window, JS round trip)
+        run: |
+          "dist/Audiobook Bob.app/Contents/MacOS/Audiobook Bob" --bridgetest
+
+      - name: Zip with ditto
+        run: |
+          ditto -c -k --keepParent "dist/Audiobook Bob.app" "Audiobook-Bob-macos-arm64.zip"
+          ls -l Audiobook-Bob-macos-arm64.zip
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Audiobook-Bob-macos-arm64
+          path: Audiobook-Bob-macos-arm64.zip
           if-no-files-found: error

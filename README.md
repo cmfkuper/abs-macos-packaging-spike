@@ -46,3 +46,8 @@ assembles them into a single chaptered `.m4b` ready for Audiobookshelf.
 - `abscd/cdrom.py` — raw CD audio access (Windows DeviceIoControl, no drivers)
 - `abscd/engine.py` — rip-to-WAV, job state/resume, ffmpeg M4B assembly
 - `abscd/gui.py` — the window
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE). Bundled ffmpeg is an
+LGPL build compiled from official source by the CI workflow.

@@ -1,3 +1,7 @@
+# Audiobook Bob — audiobook CD ripper.
+# Copyright (C) 2026 Chris Kuper
+# Licensed under the GNU General Public License v3.0 or later.
+# See the LICENSE file in the project root for details.
 """Build step: inline abscd/ui/* into abscd/ui_bundle.py for packaging.
 
 Usage:  python tools/build_ui.py

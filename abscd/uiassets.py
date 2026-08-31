@@ -1,3 +1,7 @@
+# Audiobook Bob — audiobook CD ripper.
+# Copyright (C) 2026 Chris Kuper
+# Licensed under the GNU General Public License v3.0 or later.
+# See the LICENSE file in the project root for details.
 """UI asset loading: real files in development, generated bundle when frozen.
 
 The HTML/CSS/JS live as separate editable files in abscd/ui/. They are always
