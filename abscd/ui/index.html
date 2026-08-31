@@ -333,19 +333,16 @@
             <span class="pfill" id="asm-fill"></span>
             <span class="plabel" id="asm-label">0%</span>
           </div>
-          <div class="animbox sunken"><svg id="asm-anim" width="612" height="288" viewBox="0 0 204 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Binary data draining from a column, streaming into a CD whose cover art assembles bottom-up">
+          <div class="animbox sunken"><svg id="asm-anim" width="612" height="288" viewBox="0 0 204 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Binary data draining from a column, streaming into a floppy disk whose label art assembles bottom-up">
 <defs>
   <!-- 3x5 pixel digits -->
   <g id="g1"><rect x="1" y="0" width="1" height="4"/><rect x="0" y="1" width="1" height="1"/><rect x="0" y="4" width="3" height="1"/></g>
   <g id="g0"><rect x="0" y="1" width="1" height="3"/><rect x="2" y="1" width="1" height="3"/><rect x="1" y="0" width="1" height="1"/><rect x="1" y="4" width="1" height="1"/></g>
   <!-- drain clip: y/height driven by --progress -->
   <clipPath id="drainClip"><rect id="drainRect" x="6" y="16" width="28" height="64"/></clipPath>
-  <!-- disc face (r30 at 152,52; center hole punched) doubles as the cover clip -->
-  <path id="discFace" d="M147 22h10v1h-10zM143 23h18v1h-18zM141 24h22v1h-22zM138 25h28v1h-28zM137 26h30v1h-30zM135 27h34v1h-34zM134 28h36v1h-36zM133 29h38v1h-38zM132 30h40v1h-40zM131 31h42v1h-42zM130 32h44v1h-44zM129 33h46v1h-46zM128 34h48v1h-48zM127 35h50v1h-50zM127 36h50v1h-50zM126 37h52v1h-52zM126 38h52v1h-52zM125 39h54v1h-54zM125 40h54v1h-54zM124 41h56v1h-56zM124 42h56v1h-56zM124 43h56v1h-56zM123 44h58v1h-58zM123 45h58v1h-58zM123 46h58v1h-58zM123 47h58v1h-58zM123 48h28v1h-28zM153 48h28v1h-28zM123 49h26v1h-26zM155 49h26v1h-26zM123 50h26v1h-26zM155 50h26v1h-26zM123 51h26v1h-26zM155 51h26v1h-26zM123 52h26v1h-26zM155 52h26v1h-26zM123 53h26v1h-26zM155 53h26v1h-26zM123 54h26v1h-26zM155 54h26v1h-26zM123 55h28v1h-28zM153 55h28v1h-28zM123 56h58v1h-58zM123 57h58v1h-58zM123 58h58v1h-58zM123 59h58v1h-58zM124 60h56v1h-56zM124 61h56v1h-56zM124 62h56v1h-56zM125 63h54v1h-54zM125 64h54v1h-54zM126 65h52v1h-52zM126 66h52v1h-52zM127 67h50v1h-50zM127 68h50v1h-50zM128 69h48v1h-48zM129 70h46v1h-46zM130 71h44v1h-44zM131 72h42v1h-42zM132 73h40v1h-40zM133 74h38v1h-38zM134 75h36v1h-36zM135 76h34v1h-34zM137 77h30v1h-30zM138 78h28v1h-28zM141 79h22v1h-22zM143 80h18v1h-18zM147 81h10v1h-10z"/>
-  <clipPath id="discClip"><use href="#discFace"/></clipPath>
-  <!-- reveal mask: white rect rises bottom-up with --progress -->
-  <mask id="coverMask" maskUnits="userSpaceOnUse" x="118" y="20" width="68" height="64">
-    <rect id="mReveal" x="120" y="82" width="64" height="0" fill="#fff"/>
+  <!-- reveal mask: white rect rises bottom-up with --progress over the label -->
+  <mask id="coverMask" maskUnits="userSpaceOnUse" x="122" y="20" width="64" height="66">
+    <rect id="mReveal" x="128" y="80" width="48" height="0" fill="#fff"/>
   </mask>
 </defs>
 
@@ -393,64 +390,40 @@
   <g class="p p5"><use href="#g0" x="33" y="72" fill="var(--c-navy)"/></g>
 </g>
 
-<!-- ================= 3. CD-ROM ================= -->
-<!-- blank face -->
-<use href="#discFace" fill="var(--c-silver)"/>
-<!-- face texture: dither + iridescent glints (hidden as cover rises) -->
-<g clip-path="url(#discClip)">
-  <rect x="134" y="33" width="1" height="1" fill="var(--c-gray)"/><rect x="145" y="29" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="160" y="31" width="1" height="1" fill="var(--c-gray)"/><rect x="170" y="38" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="128" y="44" width="1" height="1" fill="var(--c-gray)"/><rect x="139" y="39" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="167" y="47" width="1" height="1" fill="var(--c-gray)"/><rect x="175" y="55" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="130" y="58" width="1" height="1" fill="var(--c-gray)"/><rect x="141" y="63" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="152" y="67" width="1" height="1" fill="var(--c-gray)"/><rect x="136" y="70" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="163" y="72" width="1" height="1" fill="var(--c-gray)"/><rect x="149" y="76" width="1" height="1" fill="var(--c-gray)"/>
-  <rect x="166" y="64" width="6" height="1" fill="var(--c-aqua)"/>
-  <rect x="162" y="67" width="7" height="1" fill="var(--c-navy)"/>
-  <rect x="157" y="70" width="6" height="1" fill="var(--c-aqua)"/>
+<!-- ================= 3. FLOPPY DISK ================= -->
+<!-- shell: navy body, clipped corner top-right, 1px outline -->
+<g fill="var(--c-black)">
+  <rect x="122" y="20" width="53" height="1"/>
+  <rect x="175" y="21" width="1" height="1"/><rect x="176" y="22" width="1" height="1"/><rect x="177" y="23" width="1" height="1"/><rect x="178" y="24" width="1" height="1"/><rect x="179" y="25" width="1" height="1"/><rect x="180" y="26" width="1" height="1"/>
+  <rect x="181" y="27" width="1" height="55"/>
+  <rect x="122" y="21" width="1" height="61"/>
+  <rect x="123" y="81" width="58" height="1"/>
+</g>
+<g fill="var(--c-navy)">
+  <rect x="123" y="21" width="52" height="1"/><rect x="123" y="22" width="53" height="1"/><rect x="123" y="23" width="54" height="1"/><rect x="123" y="24" width="55" height="1"/><rect x="123" y="25" width="56" height="1"/><rect x="123" y="26" width="57" height="1"/>
+  <rect x="123" y="27" width="58" height="54"/>
+</g>
+<!-- molded sheen -->
+<rect x="125" y="23" width="4" height="1" fill="var(--c-white)"/><rect x="124" y="25" width="2" height="1" fill="var(--c-white)"/>
+<!-- metal shutter + slot -->
+<rect x="137" y="21" width="30" height="14" fill="var(--c-silver)"/>
+<rect x="137" y="21" width="30" height="1" fill="var(--c-white)"/><rect x="137" y="21" width="1" height="14" fill="var(--c-white)"/>
+<rect x="138" y="34" width="29" height="1" fill="var(--c-gray)"/><rect x="166" y="22" width="1" height="12" fill="var(--c-gray)"/>
+<rect x="141" y="23" width="5" height="10" fill="var(--c-black)"/>
+<!-- write-protect holes -->
+<rect x="124" y="74" width="2" height="4" fill="var(--c-black)"/><rect x="178" y="74" width="2" height="4" fill="var(--c-black)"/>
+<!-- label sticker: blank ruled lines, covered as the art builds -->
+<rect x="128" y="40" width="48" height="40" fill="var(--c-white)"/>
+<rect x="128" y="40" width="48" height="1" fill="var(--c-gray)"/>
+<g fill="var(--c-silver)">
+  <rect x="132" y="47" width="40" height="1"/><rect x="132" y="53" width="40" height="1"/><rect x="132" y="59" width="40" height="1"/><rect x="132" y="65" width="40" height="1"/><rect x="132" y="71" width="40" height="1"/>
 </g>
 <!-- THE COVER: swap this element's href at runtime (see header comment).
-     Demo placeholder below is an inline pixel-art data URI. -->
-<image id="cover-art" x="122" y="22" width="60" height="60"
+     Demo placeholder is an inline pixel-art data URI. -->
+<image id="cover-art" x="128" y="40" width="48" height="40"
   preserveAspectRatio="xMidYMid slice"
-  clip-path="url(#discClip)" mask="url(#coverMask)"
-  href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15' shape-rendering='crispEdges'%3E%3Crect width='15' height='15' fill='%23000080'/%3E%3Crect x='10' y='2' width='3' height='3' fill='%23ffff00'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='7' y='1' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='13' y='5' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='2' y='7' width='2' height='1' fill='%23800000'/%3E%3Crect x='1' y='8' width='4' height='1' fill='%23800000'/%3E%3Crect x='9' y='6' width='1' height='1' fill='%23800000'/%3E%3Crect x='8' y='7' width='3' height='1' fill='%23800000'/%3E%3Crect x='7' y='8' width='5' height='1' fill='%23800000'/%3E%3Crect y='9' width='15' height='3' fill='%23800000'/%3E%3Crect y='12' width='15' height='3' fill='%23808000'/%3E%3C/svg%3E"/>
-<!-- hub: black ring (r9), silver clamp donut (r8), true hole transparent (r4) -->
-<g fill="var(--c-black)">
-  <rect x="150" y="43" width="4" height="1"/><rect x="148" y="44" width="8" height="1"/><rect x="146" y="45" width="12" height="1"/>
-  <rect x="145" y="46" width="14" height="1"/><rect x="145" y="47" width="14" height="1"/>
-  <rect x="144" y="48" width="7" height="1"/><rect x="153" y="48" width="7" height="1"/>
-  <rect x="144" y="49" width="5" height="1"/><rect x="155" y="49" width="5" height="1"/>
-  <rect x="144" y="50" width="5" height="1"/><rect x="155" y="50" width="5" height="1"/>
-  <rect x="144" y="51" width="5" height="1"/><rect x="155" y="51" width="5" height="1"/>
-  <rect x="144" y="52" width="5" height="1"/><rect x="155" y="52" width="5" height="1"/>
-  <rect x="144" y="53" width="5" height="1"/><rect x="155" y="53" width="5" height="1"/>
-  <rect x="144" y="54" width="5" height="1"/><rect x="155" y="54" width="5" height="1"/>
-  <rect x="144" y="55" width="7" height="1"/><rect x="153" y="55" width="7" height="1"/>
-  <rect x="145" y="56" width="14" height="1"/><rect x="145" y="57" width="14" height="1"/>
-  <rect x="146" y="58" width="12" height="1"/><rect x="148" y="59" width="8" height="1"/><rect x="150" y="60" width="4" height="1"/>
-</g>
-<g fill="var(--c-silver)">
-  <rect x="150" y="44" width="4" height="1"/><rect x="148" y="45" width="8" height="1"/><rect x="147" y="46" width="10" height="1"/>
-  <rect x="146" y="47" width="12" height="1"/>
-  <rect x="145" y="48" width="6" height="1"/><rect x="153" y="48" width="6" height="1"/>
-  <rect x="145" y="49" width="4" height="1"/><rect x="155" y="49" width="4" height="1"/>
-  <rect x="145" y="50" width="4" height="1"/><rect x="155" y="50" width="4" height="1"/>
-  <rect x="145" y="51" width="4" height="1"/><rect x="155" y="51" width="4" height="1"/>
-  <rect x="145" y="52" width="4" height="1"/><rect x="155" y="52" width="4" height="1"/>
-  <rect x="145" y="53" width="4" height="1"/><rect x="155" y="53" width="4" height="1"/>
-  <rect x="145" y="54" width="4" height="1"/><rect x="155" y="54" width="4" height="1"/>
-  <rect x="145" y="55" width="6" height="1"/><rect x="153" y="55" width="6" height="1"/>
-</g>
-<g fill="var(--c-gray)">
-  <rect x="146" y="56" width="12" height="1"/><rect x="147" y="57" width="10" height="1"/>
-  <rect x="148" y="58" width="8" height="1"/><rect x="150" y="59" width="4" height="1"/>
-</g>
-<!-- permanent plastic sheen, sits above the cover -->
-<g fill="var(--c-white)">
-  <rect x="136" y="28" width="5" height="1"/><rect x="132" y="31" width="4" height="1"/>
-  <rect x="129" y="35" width="3" height="1"/><rect x="127" y="40" width="2" height="1"/><rect x="126" y="45" width="1" height="1"/>
-</g>
+  mask="url(#coverMask)"
+  href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15' preserveAspectRatio='xMidYMid%20slice' shape-rendering='crispEdges'%3E%3Crect width='15' height='15' fill='%23000080'/%3E%3Crect x='10' y='2' width='3' height='3' fill='%23ffff00'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='7' y='1' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='13' y='5' width='1' height='1' fill='%2300ffff'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='2' y='7' width='2' height='1' fill='%23800000'/%3E%3Crect x='1' y='8' width='4' height='1' fill='%23800000'/%3E%3Crect x='9' y='6' width='1' height='1' fill='%23800000'/%3E%3Crect x='8' y='7' width='3' height='1' fill='%23800000'/%3E%3Crect x='7' y='8' width='5' height='1' fill='%23800000'/%3E%3Crect y='9' width='15' height='3' fill='%23800000'/%3E%3Crect y='12' width='15' height='3' fill='%23808000'/%3E%3C/svg%3E"/>
 </svg></div>
           <div class="donewrap">
             <p class="paneltitle">Output file</p>

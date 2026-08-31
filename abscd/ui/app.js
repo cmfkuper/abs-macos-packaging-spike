@@ -128,7 +128,7 @@ function setAsmProgress(p) {
   const row = Math.floor(p * 64);
   scene.style.setProperty("--row", row);
   scene.style.setProperty("--flip", row % 2);
-  scene.style.setProperty("--revpx", Math.floor(p * 60));
+  scene.style.setProperty("--revpx", Math.floor(p * 40));
   scene.style.setProperty("--edgeon", row >= 64 ? 0 : 1);
 }
 
