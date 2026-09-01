@@ -256,7 +256,7 @@ class Ripper:
             if should_cancel is not None and should_cancel():
                 raise EngineError("Cancelled")
             if status is not None:
-                status(f"Disc {disc_number}: ripping track {index} of {len(tracks)}â¦")
+                status(f"Disc {disc_number}: ripping track {index} of {len(tracks)}…")
             source = getattr(track, "source", "")
             ext = "aiff" if source else "wav"
             wav = disc_dir / f"Track {index:02d}.{ext}"
@@ -284,7 +284,7 @@ class Ripper:
                                       progress=tick, should_cancel=should_cancel)
             except cdrom.RawReadUnsupported:
                 if status is not None:
-                    status(f"Disc {disc_number}: drive refused raw reads; using VLC for track {index}â¦")
+                    status(f"Disc {disc_number}: drive refused raw reads; using VLC for track {index}…")
                 completed = self._rip_with_vlc(track, wav)
                 done = sum(t.byte_size for t in tracks[:index])
                 if progress is not None:
@@ -340,6 +340,42 @@ class Encoder:
     def output_path(self) -> Path:
         return self.job.root / f"{sanitize(self.job.title)}.m4b"
 
+    @staticmethod
+    def _ensure_not_in_use(out: Path) -> None:
+        """Refuse to write an output file another process has open (e.g. an
+        orphaned encoder): two writers interleave and destroy the file."""
+        if sys.platform != "win32" or not out.exists():
+            return
+        import ctypes
+        GENERIC_READ, GENERIC_WRITE = 0x80000000, 0x40000000
+        OPEN_EXISTING = 3
+        handle = ctypes.windll.kernel32.CreateFileW(
+            str(out), GENERIC_READ | GENERIC_WRITE, 0, None, OPEN_EXISTING, 0, None)
+        if handle in (-1, ctypes.c_void_p(-1).value):
+            raise EngineError(
+                f"The output file is in use by another program: {out}. "
+                "Close it (or wait for the other encode to finish) and retry.")
+        ctypes.windll.kernel32.CloseHandle(handle)
+
+    def _verify_output(self, out: Path, expected_seconds: float) -> str | None:
+        """None if the file's duration matches what was encoded, else the
+        mismatch. Uses ffmpeg -i (the bundled build has no ffprobe)."""
+        try:
+            probe = subprocess.run(
+                [self.ffmpeg, "-hide_banner", "-i", str(out)],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=60, creationflags=CREATE_NO_WINDOW)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return f"could not probe the file ({exc})"
+        m = re.search(r"Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)", probe.stderr)
+        if not m:
+            return "no duration in the file"
+        duration = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+        if abs(duration - expected_seconds) > 10:
+            return (f"file is {duration/3600:.2f} h but "
+                    f"{expected_seconds/3600:.2f} h were encoded")
+        return None
+
     def encode(self, progress=None, status=None, should_cancel=None) -> Path:
         job = self.job
         if not job.discs:
@@ -362,10 +398,11 @@ class Encoder:
         metadata.write_text(self._ffmetadata(), encoding="utf-8")
 
         out = self.output_path()
+        self._ensure_not_in_use(out)
         total_seconds = sum(d.seconds for d in job.discs)
         if status is not None:
             hours = total_seconds / 3600
-            status(f"Converting {len(wavs)} tracks ({hours:.1f} h of audio) to M4Bâ¦")
+            status(f"Converting {len(wavs)} tracks ({hours:.1f} h of audio) to M4B…")
 
         cmd = [
             self.ffmpeg, "-hide_banner", "-y",
@@ -410,6 +447,21 @@ class Encoder:
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace",
             creationflags=CREATE_NO_WINDOW)
+
+        # Drain stderr concurrently. With hundreds of concat inputs ffmpeg
+        # writes enough stderr chatter to fill the ~64KB pipe buffer; left
+        # undrained it blocks ffmpeg mid-write and deadlocks the whole
+        # assembly (seen at 324 tracks: both processes idle at 0% CPU).
+        import collections
+        import threading
+        stderr_tail: collections.deque = collections.deque(maxlen=80)
+
+        def _drain():
+            for err_line in proc.stderr:
+                stderr_tail.append(err_line.rstrip())
+
+        drain = threading.Thread(target=_drain, daemon=True)
+        drain.start()
         try:
             for line in proc.stdout:
                 if should_cancel is not None and should_cancel():
@@ -423,12 +475,21 @@ class Encoder:
                     except ValueError:
                         pass
         finally:
-            stderr = proc.stderr.read() if proc.stderr else ""
             proc.wait()
+            drain.join(timeout=10)
+            stderr = chr(10).join(stderr_tail)
         if proc.returncode != 0:
             out.unlink(missing_ok=True)
             tail = "\n".join(stderr.strip().splitlines()[-8:])
             raise EngineError(f"ffmpeg failed (exit {proc.returncode}):\n{tail}")
+        problem = self._verify_output(out, total_seconds)
+        if problem is not None:
+            # Do NOT delete anything: the ripped discs stay on disk and
+            # the bad file stays for inspection. Losing sources to a bad
+            # encode must be impossible.
+            raise EngineError(
+                f"The finished file failed verification: {problem}. "
+                "The ripped discs were kept; fix the problem and assemble again.")
         return out
 
     def _ffmetadata(self) -> str:

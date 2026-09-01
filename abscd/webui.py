@@ -356,7 +356,18 @@ class Backend:
                 self._emit("log", text=f"Found discs {resumed} already ripped — resuming.")
             disc_number = (max(resumed) + 1) if resumed else 1
 
-            while True:
+            keep_ripping = True
+            if resumed:
+                # Everything on disk already? Let the user assemble right away
+                # instead of forcing another disc into the drive first.
+                self._emit("ask_disc", next_number=disc_number)
+                answer = self.disc_answer.get()
+                if answer == "cancel":
+                    raise engine.EngineError("Cancelled")
+                if answer == "assemble":
+                    keep_ripping = False
+
+            while keep_ripping:
                 self._emit("stage", text=f"Insert Disc {disc_number} and close the tray…")
                 self._emit("progress", done=0, total=1)
                 toc = engine.wait_for_disc(drive, should_cancel=cancelled)
@@ -402,7 +413,7 @@ class Backend:
             encoder = engine.Encoder(
                 job, bitrate=tier["bitrate"], channels=tier["channels"],
                 cover=cover if cover.is_file() else None)
-            self._emit("assembling", path=str(encoder.output_path),
+            self._emit("assembling", path=str(encoder.output_path()),
                        discs=len(job.discs), has_cover=cover.is_file())
             self._emit("stage", text="Assembling discs and converting to M4B…")
             self._emit("progress", done=0, total=1)

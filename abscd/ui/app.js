@@ -117,6 +117,13 @@ function stopElapsed() {
 
 /* ---------------- progress ---------------- */
 
+function fmtTime(seconds) {
+  seconds = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60),
+        s = seconds % 60;
+  return h + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+
 function setBar(fillId, labelId, done, total) {
   const pct = total > 0 ? Math.max(0, Math.min(100, 100 * done / total)) : 0;
   $(fillId).style.width = pct.toFixed(1) + "%";
@@ -173,6 +180,12 @@ window.onEvent = function (ev) {
       else if (state.screen === "assembling") {
         setBar("asm-fill", "asm-label", ev.done, ev.total);
         setAsmProgress(ev.total > 0 ? ev.done / ev.total : 0);
+        // On a 16-hour book one percent is ten minutes; show encoded time so
+        // working and hung are never indistinguishable again.
+        $("asm-label").textContent =
+          (ev.total > 0 ? (100 * ev.done / ev.total).toFixed(1) : "0.0") + "%";
+        setStatus("Converting… " + fmtTime(ev.done) + " of "
+                  + fmtTime(ev.total) + " encoded");
       }
       break;
     case "disc_status":
